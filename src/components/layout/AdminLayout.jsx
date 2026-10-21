@@ -348,18 +348,51 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
         <div className="flex h-16 items-center justify-center px-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.4)' }}>
           <Link
             to="/dashboard/admin"
-            className="flex items-center justify-center font-semibold text-slate-700 select-none group py-1"
+            className="flex items-center gap-2.5 select-none group py-1 px-1 transition-transform"
           >
-            <span
-              className="text-2xl font-black tracking-wider uppercase transition-transform group-hover:scale-105 duration-200"
-              style={{
-                color: '#3B1706',
-                textShadow: '1px 1px 0 #FDE68A, 2px 2px 0 #D97706, 3px 3px 0 #92400E, 4px 4px 0 #78350F, 5px 5px 4px rgba(0,0,0,0.35)',
-                letterSpacing: '0.06em'
-              }}
-            >
-              Roma Foods
-            </span>
+            {/* Luxury 3D Monogram Crest */}
+            <div className="relative w-9 h-9 rounded-xl p-[1.5px] bg-gradient-to-br from-[#F5D061] via-[#E6AF2E] to-[#7C4700] shadow-[0_4px_12px_rgba(124,71,0,0.28)] group-hover:scale-105 transition-transform duration-300">
+              <div className="w-full h-full rounded-[10px] bg-gradient-to-br from-[#2E1408] via-[#1B0B04] to-[#0E0502] flex items-center justify-center relative overflow-hidden border border-[#F5D061]/40">
+                <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent pointer-events-none" />
+                <span 
+                  className="font-serif font-black text-lg tracking-tight leading-none"
+                  style={{
+                    background: 'linear-gradient(180deg, #FFFFFF 0%, #FCE8A6 35%, #E5B438 75%, #A8710B 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'
+                  }}
+                >
+                  R
+                </span>
+              </div>
+            </div>
+
+            {/* Premium Typography */}
+            <div className="flex flex-col justify-center text-left">
+              <span
+                className="text-base font-black tracking-[0.14em] uppercase leading-tight"
+                style={{
+                  background: 'linear-gradient(180deg, #3B1706 0%, #240C02 65%, #150600 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 1px 0 rgba(255,255,255,0.9)) drop-shadow(0 2px 3px rgba(45,22,9,0.25))',
+                }}
+              >
+                ROMA
+              </span>
+              <span
+                className="text-[9px] font-black tracking-[0.36em] uppercase -mt-0.5"
+                style={{
+                  background: 'linear-gradient(90deg, #B87C24 0%, #E2AB44 50%, #9E6414 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 1px 0 rgba(255,255,255,0.6))',
+                }}
+              >
+                FOODS
+              </span>
+            </div>
           </Link>
         </div>
         <nav className="flex-1 overflow-y-auto p-3">
@@ -598,19 +631,50 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
             <div className="flex h-16 items-center justify-center px-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.4)' }}>
               <Link
                 to="/dashboard/admin"
-                className="flex items-center justify-center font-semibold text-slate-700 select-none py-1"
+                className="flex items-center gap-2.5 select-none py-1"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <span
-                  className="text-2xl font-black tracking-wider uppercase"
-                  style={{
-                    color: '#3B1706',
-                    textShadow: '1px 1px 0 #FDE68A, 2px 2px 0 #D97706, 3px 3px 0 #92400E, 4px 4px 0 #78350F, 5px 5px 4px rgba(0,0,0,0.35)',
-                    letterSpacing: '0.06em'
-                  }}
-                >
-                  Roma Foods
-                </span>
+                {/* Luxury 3D Monogram Crest */}
+                <div className="relative w-9 h-9 rounded-xl p-[1.5px] bg-gradient-to-br from-[#F5D061] via-[#E6AF2E] to-[#7C4700] shadow-[0_4px_12px_rgba(124,71,0,0.28)]">
+                  <div className="w-full h-full rounded-[10px] bg-gradient-to-br from-[#2E1408] via-[#1B0B04] to-[#0E0502] flex items-center justify-center relative overflow-hidden border border-[#F5D061]/40">
+                    <span 
+                      className="font-serif font-black text-lg tracking-tight leading-none"
+                      style={{
+                        background: 'linear-gradient(180deg, #FFFFFF 0%, #FCE8A6 35%, #E5B438 75%, #A8710B 100%)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'
+                      }}
+                    >
+                      R
+                    </span>
+                  </div>
+                </div>
+
+                {/* Premium Typography */}
+                <div className="flex flex-col justify-center text-left">
+                  <span
+                    className="text-base font-black tracking-[0.14em] uppercase leading-tight"
+                    style={{
+                      background: 'linear-gradient(180deg, #3B1706 0%, #240C02 65%, #150600 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      filter: 'drop-shadow(0 1px 0 rgba(255,255,255,0.9)) drop-shadow(0 2px 3px rgba(45,22,9,0.25))',
+                    }}
+                  >
+                    ROMA
+                  </span>
+                  <span
+                    className="text-[9px] font-black tracking-[0.36em] uppercase -mt-0.5"
+                    style={{
+                      background: 'linear-gradient(90deg, #B87C24 0%, #E2AB44 50%, #9E6414 100%)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                    }}
+                  >
+                    FOODS
+                  </span>
+                </div>
               </Link>
             </div>
             <nav className="flex-1 overflow-y-auto p-3">
