@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { CheckSquare, ClipboardList, Home, LogOut, Menu, Database, ChevronDown, ChevronRight, Zap, FileText, X, Play, Pause, KeyRound, Video, Settings, User, Edit3, Upload } from 'lucide-react'
-import sbhLogo from '../../assets/logo.png'
+
 import { motion, AnimatePresence } from "framer-motion"
 import { supabase } from "../../lib/supabaseClient"
 import { uploadImageToCloudinary } from "../../lib/cloudinary"
@@ -348,9 +348,18 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
         <div className="flex h-16 items-center justify-center px-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.4)' }}>
           <Link
             to="/dashboard/admin"
-            className="flex items-center gap-2 font-semibold text-slate-700"
+            className="flex items-center justify-center font-semibold text-slate-700 select-none group py-1"
           >
-            <img src={sbhLogo} alt="Checklist & Delegation" className="h-14 w-auto object-contain" />
+            <span
+              className="text-2xl font-black tracking-wider uppercase transition-transform group-hover:scale-105 duration-200"
+              style={{
+                color: '#3B1706',
+                textShadow: '1px 1px 0 #FDE68A, 2px 2px 0 #D97706, 3px 3px 0 #92400E, 4px 4px 0 #78350F, 5px 5px 4px rgba(0,0,0,0.35)',
+                letterSpacing: '0.06em'
+              }}
+            >
+              Roma Foods
+            </span>
           </Link>
         </div>
         <nav className="flex-1 overflow-y-auto p-3">
@@ -589,10 +598,19 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
             <div className="flex h-16 items-center justify-center px-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.4)' }}>
               <Link
                 to="/dashboard/admin"
-                className="flex items-center gap-2 font-semibold text-slate-700"
+                className="flex items-center justify-center font-semibold text-slate-700 select-none py-1"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                <img src={sbhLogo} alt="Checklist & Delegation" className="h-14 w-auto object-contain" />
+                <span
+                  className="text-2xl font-black tracking-wider uppercase"
+                  style={{
+                    color: '#3B1706',
+                    textShadow: '1px 1px 0 #FDE68A, 2px 2px 0 #D97706, 3px 3px 0 #92400E, 4px 4px 0 #78350F, 5px 5px 4px rgba(0,0,0,0.35)',
+                    letterSpacing: '0.06em'
+                  }}
+                >
+                  Roma Foods
+                </span>
               </Link>
             </div>
             <nav className="flex-1 overflow-y-auto p-3">

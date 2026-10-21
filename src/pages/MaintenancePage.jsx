@@ -1,7 +1,6 @@
 "use client"
 
 import { useNavigate } from "react-router-dom"
-import sbhLogo from "../assets/logo.png"
 
 export default function MaintenancePage() {
   const navigate = useNavigate()
@@ -17,7 +16,16 @@ export default function MaintenancePage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-purple-100 p-8 text-center">
-        <img src={sbhLogo} alt="Logo" className="h-14 mx-auto mb-6" />
+        <h1 
+          className="text-3xl font-black tracking-wider uppercase mx-auto mb-6 text-center select-none"
+          style={{
+            color: '#3B1706',
+            textShadow: '1px 1px 0 #FDE68A, 2px 2px 0 #D97706, 3px 3px 0 #92400E, 4px 4px 0 #78350F, 5px 5px 4px rgba(0,0,0,0.35)',
+            letterSpacing: '0.06em'
+          }}
+        >
+          Roma Foods
+        </h1>
 
         <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-2xl bg-purple-50 border border-purple-100 mb-4">
           <svg className="h-8 w-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
