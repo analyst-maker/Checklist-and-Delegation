@@ -438,10 +438,20 @@ export default function AdminDashboard() {
       let supabaseRows = [];
       let whatsappUsers = [];
 
-      // Always fetch whatsapp users list so all staff members show in filters
+      // Fetch whatsapp users list with 30-minute caching to eliminate redundant egress
       try {
-        const { data: uData } = await supabase.from('Whatsapp').select('*');
-        if (uData) whatsappUsers = uData;
+        const cachedUsers = localStorage.getItem('app_whatsapp_users');
+        const cachedUsersTime = Number(localStorage.getItem('app_whatsapp_users_time') || 0);
+        if (cachedUsers && Date.now() - cachedUsersTime < 30 * 60 * 1000) {
+          whatsappUsers = JSON.parse(cachedUsers);
+        } else {
+          const { data: uData } = await supabase.from('Whatsapp').select('Username, Department, Role, Number');
+          if (uData) {
+            whatsappUsers = uData;
+            localStorage.setItem('app_whatsapp_users', JSON.stringify(uData));
+            localStorage.setItem('app_whatsapp_users_time', String(Date.now()));
+          }
+        }
       } catch (uErr) {
         console.warn('Error fetching whatsapp users:', uErr);
       }
@@ -1074,13 +1084,32 @@ export default function AdminDashboard() {
     };
   }, [dashboardType]);
 
-  // Near-real-time refresh: silently re-fetch every 15s in the background so
-  // updates made elsewhere in the sheet show up here without a manual reload.
+  // Real-time synchronization: Instant updates via Supabase WebSockets (Ultra-Low Egress)
   useEffect(() => {
-    const intervalId = setInterval(() => {
+    let debounceTimer;
+    const debouncedFetch = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchDepartmentData();
+      }, 1000);
+    };
+
+    const targetTable = dashboardType === "delegation" ? "Delegation" : "Checklist";
+    const channel = supabase
+      .channel(`dashboard-realtime-${dashboardType}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: targetTable }, debouncedFetch)
+      .subscribe();
+
+    // Safety fallback: 5-minute interval instead of 15 seconds (saves ~95% egress)
+    const fallbackInterval = setInterval(() => {
       fetchDepartmentData();
-    }, 15000);
-    return () => clearInterval(intervalId);
+    }, 5 * 60 * 1000);
+
+    return () => {
+      clearTimeout(debounceTimer);
+      clearInterval(fallbackInterval);
+      supabase.removeChannel(channel);
+    };
   }, [dashboardType]);
 
   // When dashboard loads, set current date

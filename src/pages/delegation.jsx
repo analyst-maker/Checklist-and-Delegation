@@ -959,13 +959,33 @@ function DelegationDataPage() {
     fetchSheetData(false);
   }, [fetchSheetData]);
 
-  // Near-real-time refresh: silently re-fetch every 15s in the background so
-  // updates made elsewhere in the sheet show up here without a manual reload.
+  // Real-time synchronization: Instant updates via Supabase WebSockets (Ultra-Low Egress)
   useEffect(() => {
-    const intervalId = setInterval(() => {
+    let debounceTimer;
+    const debouncedFetch = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        fetchSheetData(true);
+      }, 800);
+    };
+
+    // Listen only to actual database changes instead of polling 10,000 rows every 15 seconds
+    const channel = supabase
+      .channel('delegation-realtime-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Delegation' }, debouncedFetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'DELEGATION DONE' }, debouncedFetch)
+      .subscribe();
+
+    // Safety fallback: Long 5-minute interval instead of 15 seconds (saves ~95% egress)
+    const fallbackInterval = setInterval(() => {
       fetchSheetData(true);
-    }, 15000);
-    return () => clearInterval(intervalId);
+    }, 5 * 60 * 1000);
+
+    return () => {
+      clearTimeout(debounceTimer);
+      clearInterval(fallbackInterval);
+      supabase.removeChannel(channel);
+    };
   }, [fetchSheetData]);
 
   const handleSelectItem = useCallback((id, isChecked) => {

@@ -599,13 +599,23 @@ export default function AdminSettings() {
     setLoading(true);
     try {
       const todayDDMMYYYY = formatDateToDDMMYYYY(new Date());
+
+      // Check cache for Working Day Calendar & Holidays (saves ~1,500 rows download per visit)
+      const cachedCal = localStorage.getItem('cache_working_calendar');
+      const cachedCalTime = Number(localStorage.getItem('cache_working_calendar_time') || 0);
+      const isCalValid = cachedCal && (Date.now() - cachedCalTime < 6 * 60 * 60 * 1000);
+
+      const cachedHol = localStorage.getItem('cache_holidays');
+      const cachedHolTime = Number(localStorage.getItem('cache_holidays_time') || 0);
+      const isHolValid = cachedHol && (Date.now() - cachedHolTime < 6 * 60 * 60 * 1000);
+
       const [uRes, cCountRes, dCountRes, todayCountRes, calRes, holRes, wRes] = await Promise.all([
         supabase.from('Unique').select('*').limit(3000),
         supabase.from('Checklist').select('*', { count: 'exact', head: true }),
         supabase.from('Delegation').select('*', { count: 'exact', head: true }),
         supabase.from('Checklist').select('*', { count: 'exact', head: true }).eq('Task Start Date', todayDDMMYYYY),
-        supabase.from('Working Day Calendar').select('*').limit(3000),
-        supabase.from('Holiday List').select('*').limit(1000),
+        isCalValid ? Promise.resolve({ data: JSON.parse(cachedCal) }) : supabase.from('Working Day Calendar').select('*').limit(3000),
+        isHolValid ? Promise.resolve({ data: JSON.parse(cachedHol) }) : supabase.from('Holiday List').select('*').limit(1000),
         supabase.from('Whatsapp').select('*').order('Username', { ascending: true })
       ]);
 
@@ -613,8 +623,20 @@ export default function AdminSettings() {
       if (cCountRes.count !== null) setChecklistCount(cCountRes.count);
       if (dCountRes.count !== null) setDelegationCount(dCountRes.count);
       if (todayCountRes.count !== null) setTodayGeneratedCount(todayCountRes.count);
-      if (calRes.data) setCalendarDates(calRes.data);
-      if (holRes.data) setHolidays(holRes.data);
+      if (calRes.data) {
+        setCalendarDates(calRes.data);
+        if (!isCalValid) {
+          localStorage.setItem('cache_working_calendar', JSON.stringify(calRes.data));
+          localStorage.setItem('cache_working_calendar_time', String(Date.now()));
+        }
+      }
+      if (holRes.data) {
+        setHolidays(holRes.data);
+        if (!isHolValid) {
+          localStorage.setItem('cache_holidays', JSON.stringify(holRes.data));
+          localStorage.setItem('cache_holidays_time', String(Date.now()));
+        }
+      }
       if (wRes.data) {
         const activeUsers = wRes.data.filter(u => {
           const name = (u.Username || u['User name'] || '').trim();

@@ -550,3 +550,21 @@ EXECUTE FUNCTION public.trg_fn_generate_first_task_for_unique();
 -- ==============================================================================
 -- SELECT cron.schedule('daily_task_generator', '31 18 * * *', 'SELECT public.generate_checklist_tasks()');
 
+-- ==============================================================================
+-- 15. SUPABASE REALTIME REPLICATION (Ultra-Low Egress WebSocket Synchronization)
+-- Enables instant live updates when tasks change, without heavy 15s polling
+-- ==============================================================================
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+        ALTER PUBLICATION supabase_realtime ADD TABLE public."Checklist";
+        ALTER PUBLICATION supabase_realtime ADD TABLE public."Delegation";
+        ALTER PUBLICATION supabase_realtime ADD TABLE public."DELEGATION DONE";
+        ALTER PUBLICATION supabase_realtime ADD TABLE public."Unique";
+        ALTER PUBLICATION supabase_realtime ADD TABLE public."Whatsapp";
+    END IF;
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END $$;
+
+
