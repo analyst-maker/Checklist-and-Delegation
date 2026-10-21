@@ -16,46 +16,13 @@ export default function MaintenancePage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-purple-100 p-8 text-center">
-        {/* Luxury 3D Brand Badge */}
-        <div className="flex items-center justify-center gap-3.5 mb-6">
-          <div className="w-12 h-12 rounded-2xl p-[2px] bg-gradient-to-br from-[#F5D061] via-[#E6AF2E] to-[#7C4700] shadow-[0_8px_20px_rgba(124,71,0,0.3)]">
-            <div className="w-full h-full rounded-[14px] bg-gradient-to-br from-[#2D1609] via-[#1B0B04] to-[#0E0502] flex items-center justify-center relative overflow-hidden border border-[#F5D061]/30">
-              <span 
-                className="font-serif font-black text-2xl"
-                style={{
-                  background: 'linear-gradient(180deg, #FFFFFF 0%, #FCE8A6 35%, #E5B438 75%, #A8710B 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))'
-                }}
-              >
-                R
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-col text-left">
-            <span
-              className="text-2xl font-black tracking-[0.16em] uppercase leading-tight"
-              style={{
-                background: 'linear-gradient(180deg, #3A1700 0%, #220B00 60%, #150600 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                filter: 'drop-shadow(0 1px 0 rgba(255,255,255,0.9)) drop-shadow(0 2px 4px rgba(45,22,9,0.2))',
-              }}
-            >
-              ROMA
-            </span>
-            <span
-              className="text-[11px] font-black tracking-[0.42em] uppercase"
-              style={{
-                background: 'linear-gradient(90deg, #B87C24 0%, #E2AB44 50%, #9E6414 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}
-            >
-              FOODS
-            </span>
-          </div>
+        {/* Official ROMAS Brand Logo */}
+        <div className="flex items-center justify-center mb-6">
+          <img 
+            src="/romas_logo.jpg" 
+            alt="ROMAS - Spreading Happiness" 
+            className="h-16 w-auto object-contain rounded-2xl shadow-sm" 
+          />
         </div>
 
         <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-2xl bg-purple-50 border border-purple-100 mb-4">
