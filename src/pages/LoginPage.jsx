@@ -41,15 +41,15 @@ const TypingText = ({ text }) => {
   }, [index, text]);
 
   return (
-    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-emerald-500/40 shadow-sm backdrop-blur-md">
+    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#24150D] border border-[#7A3614]/40 shadow-sm backdrop-blur-md">
       <span className="flex h-2 w-2 relative shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
       </span>
-      <span className="text-[10px] sm:text-[11px] font-black tracking-widest text-emerald-300 font-mono uppercase">
+      <span className="text-[10px] sm:text-[11px] font-black tracking-widest text-[#ECC3A3] font-mono uppercase">
         {displayed || "DEVELOPED BY DEEPAK SAHU"}
       </span>
-      <span className="w-1 h-3 bg-emerald-400 animate-pulse rounded-xs"></span>
+      <span className="w-1 h-3 bg-amber-400 animate-pulse rounded-xs"></span>
     </div>
   );
 };
@@ -260,17 +260,16 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#d5f4e6] p-3 sm:p-6 md:p-10 flex items-center justify-center font-sans antialiased selection:bg-emerald-600 selection:text-white relative overflow-hidden">
+    <div className="min-h-screen w-full bg-[#F6EEE5] p-3 sm:p-6 md:p-10 flex items-center justify-center font-sans antialiased selection:bg-[#54250E] selection:text-white relative overflow-hidden">
       
-      {/* Exact Canvas Organic Decorative Blob Shapes (Matching reference image) */}
-      {/* Top Right Dark Emerald Organic Shape */}
+      {/* Top Right Dark Mocha Organic Shape (Matching reference image) */}
       <div 
-        className="absolute -top-16 -right-16 w-80 h-80 sm:w-[28rem] sm:h-[28rem] bg-[#059669] rounded-[45%_55%_65%_35%/50%_60%_40%_50%] pointer-events-none opacity-95"
+        className="absolute -top-16 -right-16 w-80 h-80 sm:w-[28rem] sm:h-[28rem] bg-[#54250E] rounded-[45%_55%_65%_35%/50%_60%_40%_50%] pointer-events-none opacity-95"
       />
       
-      {/* Bottom Left Dark Emerald Organic Shape */}
+      {/* Bottom Left Dark Mocha Organic Shape (Matching reference image) */}
       <div 
-        className="absolute -bottom-20 -left-20 w-80 h-80 sm:w-[28rem] sm:h-[28rem] bg-[#059669] rounded-[55%_45%_35%_65%/60%_50%_50%_40%] pointer-events-none opacity-95"
+        className="absolute -bottom-20 -left-20 w-80 h-80 sm:w-[28rem] sm:h-[28rem] bg-[#54250E] rounded-[55%_45%_35%_65%/60%_50%_50%_40%] pointer-events-none opacity-95"
       />
 
       {/* Main Floating White Split Card */}
@@ -278,37 +277,35 @@ const LoginPage = () => {
         initial={{ opacity: 0, scale: 0.98, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-[1140px] bg-white rounded-[2.25rem] sm:rounded-[2.75rem] shadow-[0_30px_90px_rgba(0,0,0,0.18)] p-4 sm:p-6 md:p-7 flex flex-col lg:flex-row gap-6 lg:gap-8 relative z-10"
+        className="w-full max-w-[1140px] bg-white rounded-[2.25rem] sm:rounded-[2.75rem] shadow-[0_30px_90px_rgba(84,37,14,0.12)] p-4 sm:p-6 md:p-7 flex flex-col lg:flex-row gap-6 lg:gap-8 relative z-10"
       >
         
         {/* ========================================================================= */}
-        {/* LEFT PANEL: Hilfbox Exact Style Liquid Wave & Team Bubbles                */}
+        {/* LEFT PANEL: Warm Mocha Liquid Wave & Team Bubbles                         */}
         {/* ========================================================================= */}
-        <div className="w-full lg:w-[49%] rounded-[2rem] sm:rounded-[2.25rem] bg-gradient-to-b from-[#eafaf2] via-[#d9f6e8] to-[#c7f2dc] p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden min-h-[480px] lg:min-h-[560px]">
+        <div className="w-full lg:w-[49%] rounded-[2rem] sm:rounded-[2.25rem] bg-gradient-to-b from-[#FFFDF9] via-[#FAF1E6] to-[#F1E0CE] p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden min-h-[480px] lg:min-h-[560px]">
           
-          {/* Organic Green Wavy Splash SVG Graphic in Top Right (Exact reference art) */}
+          {/* Organic Mocha Wavy Splash SVG Graphic in Top Right (Exact reference art) */}
           <div className="absolute top-0 right-0 w-[90%] h-[65%] pointer-events-none">
             <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full object-cover">
               <defs>
-                <linearGradient id="waveGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#10b981" />
-                  <stop offset="60%" stopColor="#059669" />
-                  <stop offset="100%" stopColor="#84cc16" />
+                <linearGradient id="waveGradientMocha" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#7A3614" />
+                  <stop offset="60%" stopColor="#54250E" />
+                  <stop offset="100%" stopColor="#3E1A09" />
                 </linearGradient>
               </defs>
               <path 
                 d="M100 0C160 60 130 140 190 170C250 200 310 130 400 190V0H100Z" 
-                fill="url(#waveGradient2)" 
+                fill="url(#waveGradientMocha)" 
               />
               <path 
                 d="M170 0C210 50 190 100 250 130C310 160 350 90 400 140V0H170Z" 
-                fill="#34d399" 
-                opacity="0.4"
+                fill="#9A4F23" 
+                opacity="0.35" 
               />
             </svg>
           </div>
-
-
 
           {/* Center Content: Exact Headline Typography */}
           <motion.div
@@ -317,26 +314,26 @@ const LoginPage = () => {
             transition={{ duration: 0.7, ease: "easeOut", delay: 0.25 }}
             className="relative z-10 mt-24 sm:mt-28 lg:mt-32 mb-auto py-4 text-center max-w-sm mx-auto"
           >
-            <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+            <h2 className="text-3xl sm:text-4xl font-black text-[#1E110A] tracking-tight leading-tight">
               Welcome to TaskMaster!
             </h2>
-            <p className="text-xs sm:text-sm text-slate-600 font-medium mt-4 leading-relaxed">
+            <p className="text-xs sm:text-sm text-[#5C4538] font-medium mt-4 leading-relaxed">
               We are a team, together managing thousands of checklist tasks &amp; automated delegations every single day.
             </p>
           </motion.div>
 
-          {/* Floating Circle Visual Badges with Pure White Ring Borders (Premium Glossy & Vibrant) */}
+          {/* Floating Circle Visual Badges with Pure White Ring Borders */}
           <div className="relative z-10 space-y-4">
             <div className="relative h-24 sm:h-28 flex items-center justify-center">
               
-              {/* Left Circle: Emerald Tasks Badge */}
+              {/* Left Circle: Mocha Checklist Badge */}
               <motion.div 
                 animate={{ y: [0, -6, 0] }}
                 transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
                 whileHover={{ scale: 1.15 }}
-                className="absolute left-3 sm:left-7 w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-[0_12px_28px_rgba(5,150,105,0.35)] ring-4 ring-white overflow-hidden cursor-pointer group"
+                className="absolute left-3 sm:left-7 w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-[0_12px_28px_rgba(84,37,14,0.38)] ring-4 ring-white overflow-hidden cursor-pointer group"
               >
-                <div className="w-full h-full bg-gradient-to-tr from-[#047857] via-[#059669] to-[#10b981] flex items-center justify-center relative">
+                <div className="w-full h-full bg-gradient-to-tr from-[#3E1A09] via-[#54250E] to-[#7A3614] flex items-center justify-center relative">
                   <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/35 to-transparent rounded-t-full pointer-events-none" />
                   <ClipboardCheck className="h-6 w-6 sm:h-7 sm:w-7 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.25)] stroke-[2.2] group-hover:scale-110 transition-transform" />
                 </div>
@@ -383,11 +380,11 @@ const LoginPage = () => {
 
             </div>
 
-            {/* Pagination Dots (Exact reference style) */}
+            {/* Pagination Dots (Matching reference style) */}
             <div className="flex items-center justify-center gap-1.5 pt-1">
-              <span className="w-4 h-1.5 rounded-full bg-emerald-600"></span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-200"></span>
+              <span className="w-4 h-1.5 rounded-full bg-[#54250E]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#CBB09E]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#E4D1C3]"></span>
             </div>
 
             {/* Bottom Motion Badge: DEVELOPED BY DEEPAK SAHU */}
@@ -399,7 +396,7 @@ const LoginPage = () => {
         </div>
 
         {/* ========================================================================= */}
-        {/* RIGHT PANEL: Get Started Clean Underline Form                             */}
+        {/* RIGHT PANEL: Get Started Clean Form                                       */}
         {/* ========================================================================= */}
         <div className="flex-1 flex flex-col justify-center px-4 sm:px-8 md:px-12 py-6 sm:py-10">
           
@@ -407,20 +404,20 @@ const LoginPage = () => {
             
             {/* Header: Get Started */}
             <div className="text-center sm:text-left">
-              <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-[#111827] tracking-tight">
                 Get Started
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 font-medium mt-1">
-                Already have account? <span className="text-emerald-600 font-bold cursor-pointer">Sign In</span>
+                Already have account? <span className="text-[#54250E] hover:text-[#7A3614] font-bold cursor-pointer transition-colors">Sign In</span>
               </p>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6 pt-2">
+            <form onSubmit={handleSubmit} className="space-y-5 pt-2">
               
-              {/* Username Input with Clean Minimal Underline */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-400 block">
+              {/* Username Input with Light Blue-Tinted Box Background */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-500 block">
                   Name / Username
                 </label>
                 <input
@@ -430,13 +427,13 @@ const LoginPage = () => {
                   required
                   value={formData.username}
                   onChange={handleChange}
-                  className="w-full pb-2.5 pt-1 border-b border-slate-300 focus:border-emerald-600 text-sm sm:text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none transition-colors bg-transparent"
+                  className="w-full px-3.5 py-2.5 bg-[#EEF4FF] border border-blue-100/60 rounded-xs text-sm sm:text-base font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#54250E] transition-all"
                 />
               </div>
 
-              {/* Password Input with Clean Minimal Underline & Eye Icon */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-400 block">
+              {/* Password Input with Light Blue-Tinted Box Background & Eye Toggle */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-500 block">
                   Password
                 </label>
                 <div className="relative">
@@ -447,25 +444,25 @@ const LoginPage = () => {
                     required
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pb-2.5 pt-1 pr-10 border-b border-slate-300 focus:border-emerald-600 text-sm sm:text-base font-semibold text-slate-900 placeholder:text-slate-300 focus:outline-none transition-colors bg-transparent tracking-widest"
+                    className="w-full px-3.5 py-2.5 pr-10 bg-[#EEF4FF] border border-blue-100/60 rounded-xs text-sm sm:text-base font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#54250E] transition-all"
                   />
                   <button
                     type="button"
                     onClick={togglePasswordVisibility}
-                    className="absolute inset-y-0 right-0 pr-1 flex items-center text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-[#54250E] transition-colors cursor-pointer"
                   >
                     {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
-              {/* Primary Emerald Button (Exact reference style) */}
+              {/* Primary Chocolate Button */}
               <motion.button
                 type="submit"
                 disabled={isLoginLoading || isDataLoading}
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
-                className="w-full mt-4 py-3.5 px-6 bg-[#10b981] hover:bg-[#059669] text-white rounded-xl font-bold text-sm sm:text-base tracking-wide shadow-md shadow-emerald-500/20 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+                className="w-full mt-4 py-3.5 px-6 bg-[#54250E] hover:bg-[#431D0A] text-white rounded-xl font-bold text-sm sm:text-base tracking-wide shadow-md shadow-[#54250E]/25 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {isLoginLoading ? (
                   <>
@@ -489,7 +486,7 @@ const LoginPage = () => {
               </motion.button>
             </form>
 
-            {/* Bottom "Or sign up with" social circles (Exact reference style) */}
+            {/* Bottom "Or sign up with" social circles */}
             <div className="pt-2">
               <div className="relative flex py-2 items-center">
                 <div className="flex-grow border-t border-slate-100"></div>
