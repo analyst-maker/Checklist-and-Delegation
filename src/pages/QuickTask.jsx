@@ -103,11 +103,19 @@ export default function QuickTask() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // LOW EGRESS: non-admin users only download their own checklist rows instead of
+      // the whole table (previously every row was fetched and then filtered in the
+      // browser). Admin still fetches all rows.
+      const activeRole = (userRole || sessionStorage.getItem('role') || 'user').toLowerCase().trim();
+      let checklistQuery = supabase
         .from('Unique')
         .select('*')
         .order('Task ID', { ascending: false })
         .limit(2000);
+      if (activeRole !== 'admin' && user) {
+        checklistQuery = checklistQuery.ilike('Name', user.trim());
+      }
+      const { data, error } = await checklistQuery;
       if (error) throw error;
 
       if (data && data.length > 0) {
@@ -170,7 +178,16 @@ export default function QuickTask() {
 
     setDelegationLoading(true);
     try {
-      const { data, error } = await supabase.from('Delegation').select('*');
+      // LOW EGRESS: non-admin users only download delegation rows assigned to them OR
+      // given by them (matching the existing client-side filter below) instead of the
+      // whole table. Admin still fetches all rows.
+      const activeRole = (userRole || sessionStorage.getItem('role') || 'user').toLowerCase().trim();
+      let delegationQuery = supabase.from('Delegation').select('*');
+      if (activeRole !== 'admin' && currentUser) {
+        const u = currentUser.trim();
+        delegationQuery = delegationQuery.or(`Name.ilike.${u},"Given By".ilike.${u}`);
+      }
+      const { data, error } = await delegationQuery;
       if (error) throw error;
 
       if (data && data.length > 0) {

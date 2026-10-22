@@ -659,11 +659,54 @@ function DelegationDataPage() {
         setError(null);
       }
 
-      // Parallel fetch both tables from Supabase
-      const [mainResponse, historyResponse] = await Promise.all([
-        supabase.from('Delegation').select('*').order('Task ID', { ascending: false }).limit(5000),
-        supabase.from('DELEGATION DONE').select('*').order('id', { ascending: true }).limit(5000)
-      ]);
+      // Fetch both tables from Supabase.
+      // LOW EGRESS: a non-admin user only downloads their OWN rows instead of every
+      // user's rows (previously the full tables were fetched and then filtered in the
+      // browser, so each user was downloading everyone's data). Admin still fetches
+      // everything because the admin view needs all users' tasks + history.
+      const isAdmin = userRole === "admin";
+      const nameFilterVal = username ? username.trim() : "";
+
+      let mainResponse, historyResponse;
+
+      if (isAdmin || !nameFilterVal) {
+        // Admin (or unknown user): fetch everything in parallel — unchanged behaviour.
+        [mainResponse, historyResponse] = await Promise.all([
+          supabase.from('Delegation').select('*').order('Task ID', { ascending: false }).limit(5000),
+          supabase.from('DELEGATION DONE').select('*').order('id', { ascending: true }).limit(5000)
+        ]);
+      } else {
+        // Non-admin: only this user's delegation tasks...
+        mainResponse = await supabase
+          .from('Delegation')
+          .select('*')
+          .ilike('Name', nameFilterVal)
+          .order('Task ID', { ascending: false })
+          .limit(5000);
+
+        // ...then their history. We fetch DELEGATION DONE rows matching the user's name
+        // OR belonging to one of the user's own task IDs. The task-ID branch covers
+        // legacy/migrated history rows whose Name is null but whose parent task is the
+        // user's, so no row the UI would display is lost. (The existing client-side
+        // filteredHistoryData filter still runs, so any extra rows are harmless.)
+        const ownTaskIds = (mainResponse.data || [])
+          .map((r) => r['Task ID'] ?? r['Task id'])
+          .filter((v) => v !== null && v !== undefined && v !== '');
+
+        let historyQuery = supabase
+          .from('DELEGATION DONE')
+          .select('*')
+          .order('id', { ascending: true })
+          .limit(5000);
+
+        if (ownTaskIds.length > 0) {
+          historyQuery = historyQuery.or(`Name.ilike.${nameFilterVal},"Task id".in.(${ownTaskIds.join(',')})`);
+        } else {
+          historyQuery = historyQuery.ilike('Name', nameFilterVal);
+        }
+
+        historyResponse = await historyQuery;
+      }
 
       if (mainResponse.error) throw mainResponse.error;
 
