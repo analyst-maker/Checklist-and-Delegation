@@ -286,7 +286,7 @@ const LoginPage = () => {
         <div className="w-full lg:w-[49%] rounded-[2rem] sm:rounded-[2.25rem] bg-gradient-to-b from-[#FFFDF9] via-[#FAF1E6] to-[#F1E0CE] p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden min-h-[480px] lg:min-h-[560px]">
           
           {/* Organic Mocha Wavy Splash SVG Graphic in Top Right (Exact reference art) */}
-          <div className="absolute top-0 right-0 w-[90%] h-[65%] pointer-events-none">
+          <div className="absolute -top-6 right-0 w-[80%] h-[45%] pointer-events-none">
             <svg viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full object-cover">
               <defs>
                 <linearGradient id="waveGradientMocha" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -307,15 +307,24 @@ const LoginPage = () => {
             </svg>
           </div>
 
+          {/* Top Brand Logo */}
+          <div className="relative z-10 flex items-center justify-start">
+            <img 
+              src="/skyler-logo.png" 
+              alt="Skyler" 
+              className="h-8 sm:h-9 w-auto object-contain" 
+            />
+          </div>
+
           {/* Center Content: Exact Headline Typography */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: "easeOut", delay: 0.25 }}
-            className="relative z-10 mt-24 sm:mt-28 lg:mt-32 mb-auto py-4 text-center max-w-sm mx-auto"
+            className="relative z-10 mt-12 sm:mt-16 lg:mt-20 mb-auto py-4 text-center max-w-sm mx-auto"
           >
             <h2 className="text-3xl sm:text-4xl font-black text-[#1E110A] tracking-tight leading-tight">
-              Welcome to TaskMaster!
+              Welcome to Checklist &amp; Delegation
             </h2>
             <p className="text-xs sm:text-sm text-[#5C4538] font-medium mt-4 leading-relaxed">
               We are a team, together managing thousands of checklist tasks &amp; automated delegations every single day.

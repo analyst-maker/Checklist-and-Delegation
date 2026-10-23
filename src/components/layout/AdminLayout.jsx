@@ -270,13 +270,13 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
       active: location.pathname === "/dashboard/quick-task",
       showFor: ["admin", "user"] // Only show for admin
     },
-    {
-      href: "/dashboard/traning-video",
-      label: "Training Video",
-      icon: Video,
-      active: location.pathname === "/dashboard/traning-video",
-      showFor: ["admin", "user"] //  show both
-    },
+    // {
+    //   href: "/dashboard/traning-video",
+    //   label: "Training Video",
+    //   icon: Video,
+    //   active: location.pathname === "/dashboard/traning-video",
+    //   showFor: ["admin", "user"] // show both
+    // },
     {
       href: "/dashboard/settings",
       label: "Settings",
@@ -351,9 +351,9 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
             className="flex items-center justify-center select-none py-1 group"
           >
             <img 
-              src="/romas_logo.jpg" 
-              alt="ROMAS - Spreading Happiness" 
-              className="h-12 w-auto max-w-[190px] object-contain rounded-xl shadow-xs transition-transform group-hover:scale-105 duration-200" 
+              src="/skyler-logo.png" 
+              alt="Skyler" 
+              className="h-10 w-auto max-w-[190px] object-contain transition-transform group-hover:scale-105 duration-200" 
             />
           </Link>
         </div>
@@ -597,9 +597,9 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <img 
-                  src="/romas_logo.jpg" 
-                  alt="ROMAS - Spreading Happiness" 
-                  className="h-12 w-auto max-w-[190px] object-contain rounded-xl shadow-xs" 
+                  src="/skyler-logo.png" 
+                  alt="Skyler" 
+                  className="h-10 w-auto max-w-[190px] object-contain" 
                 />
               </Link>
             </div>
