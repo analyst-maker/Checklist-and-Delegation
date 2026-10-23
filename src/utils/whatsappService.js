@@ -258,11 +258,12 @@ export const getUserPhone = (username, usersList = []) => {
 
   const matchedUser = (usersList || []).find((u) => {
     const uName = (u.Username || u['User name'] || u.Name || '').trim().toLowerCase();
-    return uName === target;
+    const gName = (u['Given By'] || u['Give By'] || '').trim().toLowerCase();
+    return uName === target || gName === target;
   });
 
-  if (matchedUser && matchedUser.Number) {
-    return matchedUser.Number;
+  if (matchedUser) {
+    return matchedUser['Given By Number'] || matchedUser.Number || null;
   }
   return null;
 };
@@ -808,14 +809,23 @@ export const sendDelegationDoneSMS = async (taskData, usersList = []) => {
 
       if (!phoneNumber) {
         try {
-          const { data: uData } = await supabase
+          let { data: uData } = await supabase
             .from('Whatsapp')
-            .select('Number, Username')
+            .select('*')
             .ilike('Username', givenByName.trim())
             .maybeSingle();
 
-          if (uData && uData.Number) {
-            phoneNumber = uData.Number;
+          if (!uData) {
+            const { data: gbData } = await supabase
+              .from('Whatsapp')
+              .select('*')
+              .ilike('Given By', givenByName.trim())
+              .maybeSingle();
+            uData = gbData;
+          }
+
+          if (uData && (uData['Given By Number'] || uData.Number)) {
+            phoneNumber = uData['Given By Number'] || uData.Number;
           }
         } catch (e) {
           console.warn('Could not query Given By phone from Supabase:', e);

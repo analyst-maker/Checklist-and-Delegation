@@ -319,34 +319,42 @@ export default function AssignTask() {
         return true;
       };
 
-      // 1. Departments
-      const deptSet = new Set(['Office', 'Plant', 'Admin']);
+      // 1. Departments (Fetched strictly from Whatsapp table)
+      const deptSet = new Set();
       wData.forEach(r => { 
-        if (isUserActive(r) && r.Department && r.Department.trim()) deptSet.add(r.Department.trim()); 
-      });
-      uData.forEach(r => { if (r.Department && r.Department.trim()) deptSet.add(r.Department.trim()); });
-      dData.forEach(r => { if (r.Department && r.Department.trim()) deptSet.add(r.Department.trim()); });
-
-      // 2. Given By (Active Admin / Manager users or designated Given By from Whatsapp)
-      const givenBySet = new Set(['Admin', 'EA', 'Vaibhav Sir', 'Neha Garg', 'Rahul Sir']);
-      wData.forEach(r => {
-        if (isUserActive(r)) {
-          const uName = (r.Username || r['User name'] || '').trim();
-          const role = (r.Role || '').trim().toLowerCase();
-          if (role === 'admin' || role === 'manager') {
-            if (uName) givenBySet.add(uName);
+        const dept = r.Department || r.department;
+        if (dept && String(dept).trim()) {
+          const trimmed = String(dept).trim();
+          if (!trimmed.toUpperCase().startsWith('DEL_') && !trimmed.toUpperCase().startsWith('DELETED_')) {
+            deptSet.add(trimmed);
           }
-          if (r['Given By'] && r['Given By'].trim()) givenBySet.add(r['Given By'].trim());
         }
       });
-      uData.forEach(r => {
-        const gb = r['Give By'] || r['Given By'];
-        if (gb && gb.trim()) givenBySet.add(gb.trim());
+      if (deptSet.size === 0) {
+        deptSet.add('Plant');
+      }
+
+      // 2. Given By (Fetched strictly from Whatsapp table)
+      const givenBySet = new Set();
+      wData.forEach(r => {
+        const gb = r['Given By'] || r['Give By'] || r.given_by || r.givenBy;
+        if (gb && String(gb).trim()) {
+          const trimmed = String(gb).trim();
+          if (!trimmed.toUpperCase().startsWith('DEL_') && !trimmed.toUpperCase().startsWith('DELETED_')) {
+            givenBySet.add(trimmed);
+          }
+        }
+        if (isUserActive(r)) {
+          const role = (r.Role || '').trim().toLowerCase();
+          const uName = (r.Username || r['User name'] || '').trim();
+          if ((role === 'admin' || role === 'manager') && uName) {
+            givenBySet.add(uName);
+          }
+        }
       });
-      dData.forEach(r => {
-        const gb = r['Given By'] || r['Give By'];
-        if (gb && gb.trim()) givenBySet.add(gb.trim());
-      });
+      if (givenBySet.size === 0) {
+        givenBySet.add('Admin');
+      }
 
       // 3. Doers (Strictly ONLY active users from Whatsapp table)
       const doerSet = new Set();
