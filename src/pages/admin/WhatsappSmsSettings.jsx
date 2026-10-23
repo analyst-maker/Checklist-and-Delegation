@@ -199,7 +199,7 @@ export default function WhatsappSmsSettings() {
 
     const dummyTask = {
       'Task ID': 'TEST-999',
-      'Given By': testType === 'done' ? (testRecipientName || 'Director') : 'Piramal Director',
+      'Given By': testType === 'done' ? (testRecipientName || 'Director') : 'Director',
       Name: testType === 'done' ? 'Rajesh Kumar' : (testRecipientName || 'Rajesh Kumar'),
       'Task Description': 'Complete GST Reconciliation and upload invoice verification sheet',
       'Task Start Date': new Date().toLocaleDateString('en-GB'),
@@ -312,7 +312,7 @@ export default function WhatsappSmsSettings() {
   // Sample live template preview
   const sampleTask = {
     'Task ID': '1042',
-    'Given By': 'Piramal Director',
+    'Given By': 'Director',
     Name: 'Rajesh Kumar',
     'Task Description': 'Complete GST Reconciliation and upload invoice verification sheet',
     'Task Start Date': '15/10/2026',
