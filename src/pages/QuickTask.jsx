@@ -16,6 +16,8 @@ export default function QuickTask() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [activeTab, setActiveTab] = useState('checklist');
+  const [checklistLoaded, setChecklistLoaded] = useState(false);
+  const [delegationLoaded, setDelegationLoaded] = useState(false);
   const [nameFilter, setNameFilter] = useState('');
   const [nameSearchTerm, setNameSearchTerm] = useState('');
   const [freqFilter, setFreqFilter] = useState('');
@@ -51,21 +53,23 @@ export default function QuickTask() {
       setUserLoading(true);
       setError(null);
 
-      const { data, error } = await supabase.from('Whatsapp').select('*');
+      // LOW EGRESS: Query only the logged-in user's record and only needed fields
+      const { data, error } = await supabase
+        .from('Whatsapp')
+        .select('"Username", "Role", "Department", "Given By", "Email"')
+        .ilike('Username', loggedInUsername.trim())
+        .limit(1);
       
       let foundUser = null;
       if (data && data.length > 0) {
-        // Skip header row logic from sheet isn't needed anymore, just find user by Name
-        const userRow = data.find(row => row['Name']?.toLowerCase().trim() === loggedInUsername.toLowerCase().trim());
-        if (userRow) {
-          foundUser = {
-            name: userRow['Name'],
-            role: (userRow['Role'] || "user").toLowerCase().trim(),
-            department: userRow['Department'] || "",
-            givenBy: userRow['Given By'] || "",
-            email: userRow['Email'] || ""
-          };
-        }
+        const userRow = data[0];
+        foundUser = {
+          name: userRow['Username'],
+          role: (userRow['Role'] || "user").toLowerCase().trim(),
+          department: userRow['Department'] || "",
+          givenBy: userRow['Given By'] || "",
+          email: userRow['Email'] || ""
+        };
       }
 
       if (!foundUser) {
@@ -103,15 +107,13 @@ export default function QuickTask() {
 
     setLoading(true);
     try {
-      // LOW EGRESS: non-admin users only download their own checklist rows instead of
-      // the whole table (previously every row was fetched and then filtered in the
-      // browser). Admin still fetches all rows.
+      // LOW EGRESS: Select only needed columns and limit query size
       const activeRole = (userRole || sessionStorage.getItem('role') || 'user').toLowerCase().trim();
       let checklistQuery = supabase
         .from('Unique')
-        .select('*')
+        .select('"Task ID", "Department", "Give By", "Name", "Task Description", "Task Start date", "Frequency", "Enable Reminder", "Require Attatchment"')
         .order('Task ID', { ascending: false })
-        .limit(2000);
+        .limit(1000);
       if (activeRole !== 'admin' && user) {
         checklistQuery = checklistQuery.ilike('Name', user.trim());
       }
@@ -178,11 +180,13 @@ export default function QuickTask() {
 
     setDelegationLoading(true);
     try {
-      // LOW EGRESS: non-admin users only download delegation rows assigned to them OR
-      // given by them (matching the existing client-side filter below) instead of the
-      // whole table. Admin still fetches all rows.
+      // LOW EGRESS: select only required columns and limit query size
       const activeRole = (userRole || sessionStorage.getItem('role') || 'user').toLowerCase().trim();
-      let delegationQuery = supabase.from('Delegation').select('*');
+      let delegationQuery = supabase
+        .from('Delegation')
+        .select('"Task ID", "Timestamp", "Department", "Given By", "Name", "Task Description", "Task Start Date", "Freq", "Enable Reminders", "Require Attachment"')
+        .order('Task ID', { ascending: false })
+        .limit(1000);
       if (activeRole !== 'admin' && currentUser) {
         const u = currentUser.trim();
         delegationQuery = delegationQuery.or(`Name.ilike.${u},"Given By".ilike.${u}`);
@@ -380,13 +384,24 @@ export default function QuickTask() {
     fetchCurrentUser();
   }, [fetchCurrentUser]);
 
-  // Fetch task data when user is loaded
+  // ULTRA-LOW EGRESS: Lazy fetch task data based on active tab so only viewed data is downloaded
   useEffect(() => {
     if (currentUser && userRole && !userLoading) {
-      fetchChecklistData();
-      fetchDelegationData();
+      if (activeTab === 'checklist' && !checklistLoaded) {
+        fetchChecklistData().then(() => setChecklistLoaded(true));
+      } else if (activeTab === 'delegation' && !delegationLoaded) {
+        fetchDelegationData().then(() => setDelegationLoaded(true));
+      }
     }
-  }, [fetchChecklistData, fetchDelegationData, currentUser, userRole, userLoading]);
+  }, [fetchChecklistData, fetchDelegationData, currentUser, userRole, userLoading, activeTab, checklistLoaded, delegationLoaded]);
+
+  const handleRefresh = useCallback(() => {
+    if (activeTab === 'checklist') {
+      fetchChecklistData().then(() => setChecklistLoaded(true));
+    } else {
+      fetchDelegationData().then(() => setDelegationLoaded(true));
+    }
+  }, [activeTab, fetchChecklistData, fetchDelegationData]);
 
   // Show loading while fetching user data
   if (userLoading) {
@@ -594,6 +609,18 @@ export default function QuickTask() {
                   </div>
                 )}
               </div>
+
+              <button
+                onClick={handleRefresh}
+                title="Refresh current tasks"
+                disabled={loading || delegationLoading}
+                className="flex items-center justify-center p-2 border border-purple-200 rounded-md bg-white text-purple-600 hover:bg-purple-50 disabled:opacity-50 transition-colors shadow-sm"
+              >
+                <RefreshCw
+                  size={16}
+                  className={(loading || delegationLoading) ? "animate-spin" : ""}
+                />
+              </button>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 "use client"
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { format } from 'date-fns';
+import { supabase } from '../lib/supabaseClient';
 import { Search, ChevronDown, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 export default function DelegationPage({
@@ -10,10 +11,12 @@ export default function DelegationPage({
     setNameFilter,
     setFreqFilter,
     currentUser,
-    userRole
+    userRole,
+    delegationTasks: propDelegationTasks,
+    delegationLoading: propLoading
 }) {
-    const [delegationTasks, setDelegationTasks] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [delegationTasks, setDelegationTasks] = useState(propDelegationTasks || []);
+    const [loading, setLoading] = useState(propLoading || false);
     const [error, setError] = useState(null);
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
     const [currentPage, setCurrentPage] = useState(1);
@@ -22,12 +25,6 @@ export default function DelegationPage({
         name: false,
         frequency: false
     });
-
-    // Config should be memoized to prevent unnecessary re-renders
-    const CONFIG = useMemo(() => ({
-        APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyAy98t3XAyRP3pFE7XOoDiTDU3Yc9WOIFayRXELW2XnUAzl7yE9bnO94GvZV0wJkH_/exec",
-        DELEGATION_SHEET: "Delegation"
-    }), []);
 
     // Format date helper function
     const formatDate = useCallback((dateValue) => {
@@ -40,64 +37,80 @@ export default function DelegationPage({
         }
     }, []);
 
-    // Fetch data with role-based filtering
+    // Sync with propDelegationTasks if passed from parent
+    useEffect(() => {
+        if (propDelegationTasks !== undefined && Array.isArray(propDelegationTasks)) {
+            setDelegationTasks(propDelegationTasks);
+        }
+    }, [propDelegationTasks]);
+
+    // Fetch data directly from Supabase Database 'Delegation' table (only if not provided by parent)
     const fetchData = useCallback(async () => {
-        if (!currentUser || !userRole) return;
+        if (!currentUser || !userRole || propDelegationTasks !== undefined) return;
 
         try {
             setLoading(true);
             setError(null);
 
-            const response = await fetch(
-                `${CONFIG.APPS_SCRIPT_URL}?sheet=${CONFIG.DELEGATION_SHEET}&action=fetch`,
-                { redirect: 'follow' }
-            );
+            const activeRole = (userRole || sessionStorage.getItem('role') || 'user').toLowerCase().trim();
+            const isAdmin = activeRole === 'admin';
 
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            // LOW EGRESS: select only required columns and limit
+            let query = supabase
+                .from('Delegation')
+                .select('"Task ID", "Timestamp", "Department", "Given By", "Name", "Task Description", "Task Start Date", "Freq", "Enable Reminders", "Require Attachment"')
+                .order('Task ID', { ascending: false })
+                .limit(1000);
 
-            const data = await response.json();
+            // Admin: overall delegation tasks from all users
+            // Regular user: only their own tasks (assigned to them or given by them)
+            if (!isAdmin && currentUser) {
+                const u = currentUser.trim();
+                query = query.or(`Name.ilike.${u},"Given By".ilike.${u}`);
+            }
 
-            if (data?.table?.rows) {
-                const transformedData = data.table.rows.slice(1).map((row, rowIndex) => ({
-                    _id: `row_${rowIndex}_${Date.now()}`,
+            const { data, error: dbError } = await query;
+            if (dbError) throw dbError;
+
+            if (data && Array.isArray(data)) {
+                const transformedData = data.map((row, rowIndex) => ({
+                    _id: `delegation_${row['Task ID'] || rowIndex}_${rowIndex}`,
                     _rowIndex: rowIndex + 2,
-                    Timestamp: formatDate(row.c[0]?.v),
-                    'Task ID': row.c[1]?.v || "",
-                    Department: row.c[2]?.v || "",
-                    'Given By': row.c[3]?.v || "",
-                    Name: row.c[4]?.v || "",
-                    'Task Description': row.c[5]?.v || "",
-                    'Task Start Date': formatDate(row.c[6]?.v),
-                    Freq: row.c[7]?.v || "",
-                    'Enable Reminders': row.c[8]?.v || "",
-                    'Require Attachment': row.c[9]?.v || "",
+                    Timestamp: row['Timestamp'] || "",
+                    'Task ID': row['Task ID'] || "",
+                    Department: row['Department'] || "",
+                    'Given By': row['Given By'] || "",
+                    Name: row['Name'] || "",
+                    'Task Description': row['Task Description'] || row['description'] || "",
+                    'Task Start Date': row['Task Start Date'] || row['Planned Date'] || "",
+                    Freq: row['Freq'] || row['Frequency'] || "one-time",
+                    'Enable Reminders': row['Enable Reminders'] !== undefined ? String(row['Enable Reminders']) : "true",
+                    'Require Attachment': row['Require Attachment'] !== undefined ? String(row['Require Attachment']) : "false",
                 }));
 
-                // Apply role-based filtering
                 let filteredData;
-                if (userRole === 'admin') {
+                if (isAdmin) {
                     filteredData = transformedData;
                 } else {
+                    const currentUserLower = currentUser.toLowerCase().trim();
                     filteredData = transformedData.filter(task => {
                         const taskName = (task.Name || '').toString().toLowerCase().trim();
                         const taskGivenBy = (task['Given By'] || '').toString().toLowerCase().trim();
-                        const currentUserLower = currentUser.toLowerCase().trim();
-
                         return taskName === currentUserLower || taskGivenBy === currentUserLower;
                     });
                 }
 
                 setDelegationTasks(filteredData);
             } else {
-                throw new Error("Invalid data format");
+                setDelegationTasks([]);
             }
         } catch (err) {
-            console.error("Fetch error:", err);
-            setError(err.message || "Failed to load delegation data");
+            console.error("Supabase Delegation fetch error:", err);
+            setError(err.message || "Failed to load delegation data from database");
         } finally {
             setLoading(false);
         }
-    }, [CONFIG, currentUser, userRole, formatDate]);
+    }, [currentUser, userRole]);
 
     // Sort function
     const requestSort = useCallback((key) => {
@@ -211,10 +224,12 @@ export default function DelegationPage({
         { key: 'Require Attachment', label: 'Attachment' },
     ], []);
 
-    // Fetch data on mount
+    // Fetch data on mount ONLY if tasks were not provided by parent component
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        if (propDelegationTasks === undefined) {
+            fetchData();
+        }
+    }, [fetchData, propDelegationTasks]);
 
     if (!currentUser || !userRole) {
         return (
@@ -289,7 +304,7 @@ export default function DelegationPage({
                                                 </div>
                                             </div>
                                             <p className="luxury-text-title">Loading delegation data...</p>
-                                            <p className="luxury-text-subtitle">Syncing with Google Sheets</p>
+                                            <p className="luxury-text-subtitle">Syncing with Database</p>
                                         </div>
                                     </div>
                                 </td>
