@@ -2421,7 +2421,7 @@ export default function AdminSettings() {
                       <MessageSquare className="h-6 w-6" />
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      Maytapi API
+                      Maytapi & AiSensy
                     </span>
                   </div>
 
@@ -2430,7 +2430,7 @@ export default function AdminSettings() {
                       Whatsapp Service
                     </h3>
                     <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                      Maytapi WhatsApp credentials configure karein, automated task reminder SMS bhejein aur live message delivery logs monitor karein.
+                      Maytapi ya AiSensy WhatsApp credentials configure karein, automated task reminder SMS bhejein aur live message delivery logs monitor karein.
                     </p>
                   </div>
                 </div>

@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS public."Holiday List" (
     "Holiday" TEXT
 );
 
--- 8. TABLE: whatsapp_settings (Maytapi API Credentials & Templates)
+-- 8. TABLE: whatsapp_settings (Maytapi & AiSensy API Credentials & Templates)
 CREATE TABLE IF NOT EXISTS public."whatsapp_settings" (
     "id" TEXT PRIMARY KEY DEFAULT 'default',
     "product_id" TEXT,

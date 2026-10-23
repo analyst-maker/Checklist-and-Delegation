@@ -5,23 +5,26 @@ import {
   MessageSquare, Send, CheckCircle2, AlertCircle, RefreshCw, Key, Shield, 
   Smartphone, Database, Sliders, ExternalLink, Copy, Check, Eye, EyeOff, 
   Trash2, Download, Search, Filter, Sparkles, Clock, User, Phone, CheckCircle, 
-  AlertTriangle, FileText, Settings, ArrowRight, X, Play
+  AlertTriangle, FileText, Settings, ArrowRight, X, Play, Zap, Radio
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import AdminLayout from '../../components/layout/AdminLayout';
 import { supabase } from '../../lib/supabaseClient';
 import { 
-  getMaytapiConfig, 
-  saveMaytapiConfig, 
-  sendMaytapiSMS, 
+  getWhatsappConfig, 
+  saveWhatsappConfig, 
+  sendWhatsappSMS,
+  sendMaytapiSMS,
+  sendAisensySMS,
   getWhatsappLogs, 
   clearWhatsappLogs, 
   generateDelegationMessage,
-  formatPhoneNumber
+  formatPhoneNumber,
+  DEFAULT_TEMPLATE
 } from '../../utils/whatsappService';
 
 const SQL_SETUP_SCRIPT = `-- ==============================================================================
--- SUPABASE SQL SETUP FOR WHATSAPP SMS & LOGS
+-- SUPABASE SQL SETUP FOR WHATSAPP SMS & LOGS (Maytapi & AiSensy Support)
 -- Run this in your Supabase SQL Editor (https://supabase.com/dashboard)
 -- ==============================================================================
 
@@ -44,7 +47,7 @@ ALTER TABLE public.whatsapp_logs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow all operations for public on whatsapp_logs" ON public.whatsapp_logs;
 CREATE POLICY "Allow all operations for public on whatsapp_logs" ON public.whatsapp_logs FOR ALL USING (true) WITH CHECK (true);
 
--- 2. Create whatsapp_settings table to store Maytapi credentials centrally
+-- 2. Create whatsapp_settings table to store Maytapi & AiSensy credentials centrally
 CREATE TABLE IF NOT EXISTS public.whatsapp_settings (
     id TEXT PRIMARY KEY DEFAULT 'default',
     product_id TEXT,
@@ -73,17 +76,25 @@ export default function WhatsappSmsSettings() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
 
-  // Maytapi Config State
+  // WhatsApp Configuration State (Supports Maytapi & AiSensy)
   const [config, setConfig] = useState({
+    provider: 'maytapi', // 'maytapi' | 'aisensy'
+    // Maytapi
     productId: '',
     phoneId: '',
     token: '',
     apiUrl: 'https://api.maytapi.com/api',
+    // AiSensy
+    aisensyApiKey: '',
+    aisensyCampaignName: '',
+    aisensyApiUrl: 'https://backend.aisensy.com/campaign/t1/api/v2',
+    // Global
     enabled: true,
     template: '',
   });
 
   const [showToken, setShowToken] = useState(false);
+  const [showAisensyKey, setShowAisensyKey] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [showSqlModal, setShowSqlModal] = useState(false);
 
@@ -105,8 +116,13 @@ export default function WhatsappSmsSettings() {
     const init = async () => {
       setLoading(true);
       try {
-        const currentConfig = await getMaytapiConfig();
-        setConfig(currentConfig);
+        const currentConfig = await getWhatsappConfig();
+        setConfig({
+          ...currentConfig,
+          template: (!currentConfig.template || currentConfig.template === 'test' || currentConfig.template === 'Default Template') 
+            ? DEFAULT_TEMPLATE 
+            : currentConfig.template
+        });
         const logData = await getWhatsappLogs();
         setLogs(logData);
       } catch (err) {
@@ -125,13 +141,19 @@ export default function WhatsappSmsSettings() {
     setSaveSuccess(false);
 
     try {
-      if (!config.productId || !config.phoneId || !config.token) {
-        if (config.enabled) {
-          throw new Error('Please fill in Product ID, Phone ID, and Secret Token before enabling.');
+      if (config.enabled) {
+        if (config.provider === 'aisensy') {
+          if (!config.aisensyApiKey || !config.aisensyCampaignName) {
+            throw new Error('Please fill in both AiSensy API Key and Campaign Name before enabling.');
+          }
+        } else {
+          if (!config.productId || !config.phoneId || !config.token) {
+            throw new Error('Please fill in Maytapi Product ID, Phone ID, and Secret Token before enabling.');
+          }
         }
       }
 
-      await saveMaytapiConfig(config);
+      await saveWhatsappConfig(config);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 4000);
     } catch (err) {
@@ -158,25 +180,30 @@ export default function WhatsappSmsSettings() {
       phoneId: (config.phoneId || '').trim(),
       token: (config.token || '').trim(),
       apiUrl: (config.apiUrl || 'https://api.maytapi.com/api').trim(),
+      aisensyApiKey: (config.aisensyApiKey || '').trim(),
+      aisensyCampaignName: (config.aisensyCampaignName || '').trim(),
+      aisensyApiUrl: (config.aisensyApiUrl || 'https://backend.aisensy.com/campaign/t1/api/v2').trim(),
     };
 
     const dummyTask = {
       'Task ID': 'TEST-999',
       'Given By': 'System Admin',
       Name: (testRecipientName || 'Test User').trim(),
-      'Task Description': 'Test automated WhatsApp message from Maytapi Integration',
+      'Task Description': `Test automated WhatsApp message via ${cleanConfig.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'}`,
       'Task Start Date': new Date().toLocaleDateString('en-GB'),
     };
 
     const previewMsg = generateDelegationMessage(dummyTask, cleanConfig.template);
 
     try {
-      const res = await sendMaytapiSMS({
+      const res = await sendWhatsappSMS({
         toNumber: cleanNumber,
         message: previewMsg,
         taskId: 'TEST-999',
         recipientName: testRecipientName,
         allocatedBy: 'Admin (Test)',
+        taskDescription: dummyTask['Task Description'],
+        startDate: dummyTask['Task Start Date'],
         configOverride: cleanConfig,
       });
 
@@ -220,9 +247,10 @@ export default function WhatsappSmsSettings() {
       return;
     }
 
-    const headers = ['Time (UTC/IST)', 'Task ID', 'Recipient', 'Phone Number', 'Allocated By', 'Status', 'Message', 'Error Details'];
+    const headers = ['Time (UTC/IST)', 'Provider', 'Task ID', 'Recipient', 'Phone Number', 'Allocated By', 'Status', 'Message', 'Error Details'];
     const rows = logs.map(l => [
       `"${l.created_at || ''}"`,
+      `"${l.provider || 'Maytapi'}"`,
       `"${l.task_id || ''}"`,
       `"${(l.recipient_name || '').replace(/"/g, '""')}"`,
       `"${l.recipient_phone || ''}"`,
@@ -252,7 +280,8 @@ export default function WhatsappSmsSettings() {
         (l.recipient_name && l.recipient_name.toLowerCase().includes(q)) ||
         (l.recipient_phone && l.recipient_phone.includes(q)) ||
         (l.allocated_by && l.allocated_by.toLowerCase().includes(q)) ||
-        (l.message && l.message.toLowerCase().includes(q));
+        (l.message && l.message.toLowerCase().includes(q)) ||
+        (l.provider && l.provider.toLowerCase().includes(q));
 
       const matchStatus = logStatusFilter === 'ALL' || (l.status || '').toLowerCase() === logStatusFilter.toLowerCase();
       return matchSearch && matchStatus;
@@ -269,7 +298,9 @@ export default function WhatsappSmsSettings() {
   };
   const livePreviewText = generateDelegationMessage(sampleTask, config.template);
 
-  const isConfigured = Boolean(config.productId && config.phoneId && config.token);
+  const isMaytapiConfigured = Boolean(config.productId && config.phoneId && config.token);
+  const isAisensyConfigured = Boolean(config.aisensyApiKey && config.aisensyCampaignName);
+  const isConfigured = config.provider === 'aisensy' ? isAisensyConfigured : isMaytapiConfigured;
 
   return (
     <AdminLayout>
@@ -281,18 +312,18 @@ export default function WhatsappSmsSettings() {
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-semibold uppercase tracking-wider">
                 <MessageSquare className="h-3.5 w-3.5" />
-                Maytapi WhatsApp SMS Automation
+                WhatsApp SMS Automation (Maytapi & AiSensy)
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
                 <span>WhatsApp SMS & Logs</span>
                 {isConfigured && config.enabled ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                     <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Active & Connected
+                    Active ({config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'})
                   </span>
                 ) : !isConfigured ? (
                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                    <AlertTriangle className="h-3.5 w-3.5" /> Unconfigured
+                    <AlertTriangle className="h-3.5 w-3.5" /> {config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'} Unconfigured
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
@@ -301,7 +332,7 @@ export default function WhatsappSmsSettings() {
                 )}
               </h1>
               <p className="text-slate-300 text-sm max-w-2xl">
-                Automatically send instant WhatsApp notifications to assignees whenever a new Delegation Task is created, and monitor real-time delivery logs.
+                Automatically send instant WhatsApp notifications to assignees via <strong>{config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'}</strong> whenever a new Delegation Task is created, and monitor real-time delivery logs.
               </p>
             </div>
 
@@ -356,7 +387,7 @@ export default function WhatsappSmsSettings() {
               }`}
             >
               <Key className="h-4 w-4" />
-              <span>Maytapi Credentials & Template</span>
+              <span>Provider Credentials & Template</span>
             </button>
 
             <button
@@ -391,7 +422,7 @@ export default function WhatsappSmsSettings() {
               {saveSuccess && (
                 <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-sm animate-in fade-in">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>Maytapi WhatsApp credentials & template saved successfully!</span>
+                  <span>WhatsApp SMS credentials & template saved successfully!</span>
                 </div>
               )}
               {saveError && (
@@ -401,8 +432,10 @@ export default function WhatsappSmsSettings() {
                 </div>
               )}
 
-              {/* Card: Maytapi API Credentials */}
+              {/* Card: WhatsApp Provider & Credentials */}
               <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/80 space-y-6">
+                
+                {/* Header & Master Toggle */}
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-600">
@@ -410,99 +443,245 @@ export default function WhatsappSmsSettings() {
                     </div>
                     <div>
                       <h2 className="text-base font-extrabold text-slate-800">
-                        Maytapi API Credentials
+                        WhatsApp SMS Provider
                       </h2>
                       <p className="text-xs text-slate-400">
-                        Enter your Maytapi WhatsApp API Product ID, Phone ID & Secret Token
+                        Choose active provider (Maytapi or AiSensy) and configure API credentials
                       </p>
                     </div>
                   </div>
 
                   {/* Master Toggle */}
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={config.enabled}
-                      onChange={(e) => setConfig(prev => ({ ...prev, enabled: e.target.checked }))}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                    <span className="ml-2.5 text-xs font-bold text-slate-700">
+                  <label className="inline-flex items-center gap-3 cursor-pointer select-none">
+                    <span className="text-xs font-bold text-slate-700">
                       {config.enabled ? 'Enabled' : 'Disabled'}
                     </span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        checked={config.enabled}
+                        onChange={(e) => setConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </div>
                   </label>
                 </div>
 
+                {/* Provider Selector Tabs */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Radio className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>Select Active SMS Provider:</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3 p-1.5 bg-slate-100/80 rounded-2xl border border-slate-200/80">
+                    <button
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, provider: 'maytapi' }))}
+                      className={`flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                        config.provider === 'maytapi'
+                          ? 'bg-white text-emerald-700 shadow-md border border-emerald-200/60'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      }`}
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${config.provider === 'maytapi' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                      <span>Maytapi API</span>
+                      {isMaytapiConfigured && (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 ml-auto" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, provider: 'aisensy' }))}
+                      className={`flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                        config.provider === 'aisensy'
+                          ? 'bg-white text-indigo-700 shadow-md border border-indigo-200/60'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      }`}
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${config.provider === 'aisensy' ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                      <span>AiSensy API</span>
+                      {isAisensyConfigured && (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 shrink-0 ml-auto" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
                 <form onSubmit={handleSaveConfig} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    
-                    {/* Product ID */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">
-                        Product ID <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 5xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                        value={config.productId}
-                        onChange={(e) => setConfig(prev => ({ ...prev, productId: e.target.value.trim() }))}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all"
-                        required={config.enabled}
-                      />
-                    </div>
+                  
+                  {/* ========================================================= */}
+                  {/* MAYTAPI FIELDS (shown when provider === 'maytapi')         */}
+                  {/* ========================================================= */}
+                  {config.provider === 'maytapi' && (
+                    <div className="space-y-4 p-4 rounded-2xl bg-emerald-50/40 border border-emerald-100 animate-in fade-in">
+                      <div className="flex items-center justify-between pb-2 border-b border-emerald-100/60">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+                          <span className="text-xs font-extrabold text-emerald-900">Maytapi Credentials</span>
+                        </div>
+                        <span className="text-[11px] text-emerald-700 font-medium">Standard WhatsApp Instance</span>
+                      </div>
 
-                    {/* Phone ID */}
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700">
-                        Phone ID <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 109164"
-                        value={config.phoneId}
-                        onChange={(e) => setConfig(prev => ({ ...prev, phoneId: e.target.value.trim() }))}
-                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all"
-                        required={config.enabled}
-                      />
-                    </div>
-                  </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Product ID */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700">
+                            Product ID <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 5xxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                            value={config.productId}
+                            onChange={(e) => setConfig(prev => ({ ...prev, productId: e.target.value.trim() }))}
+                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                            required={config.enabled && config.provider === 'maytapi'}
+                          />
+                        </div>
 
-                  {/* Secret Token */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">
-                      Secret Token (x-maytapi-key) <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showToken ? "text" : "password"}
-                        placeholder="Enter Maytapi Secret Token..."
-                        value={config.token}
-                        onChange={(e) => setConfig(prev => ({ ...prev, token: e.target.value.trim() }))}
-                        className="w-full px-3.5 py-2.5 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all"
-                        required={config.enabled}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowToken(!showToken)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                      >
-                        {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
+                        {/* Phone ID */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700">
+                            Phone ID <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 109164"
+                            value={config.phoneId}
+                            onChange={(e) => setConfig(prev => ({ ...prev, phoneId: e.target.value.trim() }))}
+                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                            required={config.enabled && config.provider === 'maytapi'}
+                          />
+                        </div>
+                      </div>
 
-                  {/* API Base URL (Advanced) */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700">
-                      API Base URL
-                    </label>
-                    <input
-                      type="text"
-                      value={config.apiUrl || 'https://api.maytapi.com/api'}
-                      onChange={(e) => setConfig(prev => ({ ...prev, apiUrl: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all"
-                    />
-                  </div>
+                      {/* Secret Token */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">
+                          Secret Token (x-maytapi-key) <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showToken ? "text" : "password"}
+                            placeholder="Enter Maytapi Secret Token..."
+                            value={config.token}
+                            onChange={(e) => setConfig(prev => ({ ...prev, token: e.target.value.trim() }))}
+                            className="w-full px-3.5 py-2.5 pr-10 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                            required={config.enabled && config.provider === 'maytapi'}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowToken(!showToken)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          >
+                            {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* API Base URL */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">
+                          Maytapi API Base URL
+                        </label>
+                        <input
+                          type="text"
+                          value={config.apiUrl || 'https://api.maytapi.com/api'}
+                          onChange={(e) => setConfig(prev => ({ ...prev, apiUrl: e.target.value }))}
+                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ========================================================= */}
+                  {/* AISENSY FIELDS (shown when provider === 'aisensy')         */}
+                  {/* ========================================================= */}
+                  {config.provider === 'aisensy' && (
+                    <div className="space-y-4 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 animate-in fade-in">
+                      <div className="flex items-center justify-between pb-2 border-b border-indigo-100/60">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-indigo-500"></span>
+                          <span className="text-xs font-extrabold text-indigo-900">AiSensy Official WhatsApp Business API</span>
+                        </div>
+                        <span className="text-[11px] text-indigo-700 font-medium">Campaign API v2</span>
+                      </div>
+
+                      {/* API Key */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">
+                          AiSensy API Key <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showAisensyKey ? "text" : "password"}
+                            placeholder="Enter AiSensy API Key (from Manage > API Key)..."
+                            value={config.aisensyApiKey}
+                            onChange={(e) => setConfig(prev => ({ ...prev, aisensyApiKey: e.target.value.trim() }))}
+                            className="w-full px-3.5 py-2.5 pr-10 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            required={config.enabled && config.provider === 'aisensy'}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowAisensyKey(!showAisensyKey)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          >
+                            {showAisensyKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400">
+                          Find this on your AiSensy Dashboard under <strong>Manage &gt; API Key</strong>
+                        </p>
+                      </div>
+
+                      {/* Campaign Name */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">
+                          Campaign Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. task_delegation_reminder (Status must be Live in AiSensy)"
+                          value={config.aisensyCampaignName}
+                          onChange={(e) => setConfig(prev => ({ ...prev, aisensyCampaignName: e.target.value.trim() }))}
+                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                          required={config.enabled && config.provider === 'aisensy'}
+                        />
+                        <p className="text-[10px] text-slate-400">
+                          The exact pre-approved campaign name created in AiSensy dashboard linked to your WhatsApp template.
+                        </p>
+                      </div>
+
+                      {/* API Base URL */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-slate-700">
+                          AiSensy API Endpoint
+                        </label>
+                        <input
+                          type="text"
+                          value={config.aisensyApiUrl || 'https://backend.aisensy.com/campaign/t1/api/v2'}
+                          onChange={(e) => setConfig(prev => ({ ...prev, aisensyApiUrl: e.target.value }))}
+                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                        />
+                      </div>
+
+                      {/* Template Variable Mapping Info */}
+                      <div className="p-3 bg-white rounded-xl border border-indigo-100 text-slate-700 space-y-1.5 text-xs">
+                        <p className="font-bold text-indigo-900 flex items-center gap-1.5">
+                          <Zap className="h-3.5 w-3.5 text-indigo-600" />
+                          <span>AiSensy Template Parameters Mapping:</span>
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-mono text-slate-600 pt-1">
+                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{1}}`}</code> &rarr; Recipient Name</span>
+                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{2}}`}</code> &rarr; Task ID</span>
+                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{3}}`}</code> &rarr; Allocated By</span>
+                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{4}}`}</code> &rarr; Task Description</span>
+                          <span className="p-1 rounded bg-slate-50 border border-slate-100 col-span-full"><code>{`{{5}}`}</code> &rarr; Deadline (Task Start Date)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Message Template */}
                   <div className="space-y-1.5 pt-2">
@@ -511,9 +690,16 @@ export default function WhatsappSmsSettings() {
                         <FileText className="h-3.5 w-3.5 text-emerald-600" />
                         <span>Delegation Task Message Template</span>
                       </label>
+                      <button
+                        type="button"
+                        onClick={() => setConfig(prev => ({ ...prev, template: DEFAULT_TEMPLATE }))}
+                        className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
+                      >
+                        Reset to Skyler World Template
+                      </button>
                     </div>
                     <textarea
-                      rows={9}
+                      rows={8}
                       value={config.template}
                       onChange={(e) => setConfig(prev => ({ ...prev, template: e.target.value }))}
                       className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all leading-relaxed"
@@ -546,12 +732,12 @@ export default function WhatsappSmsSettings() {
                       {saving ? (
                         <>
                           <RefreshCw className="h-4 w-4 animate-spin" />
-                          <span>Saving Maytapi Credentials...</span>
+                          <span>Saving Credentials...</span>
                         </>
                       ) : (
                         <>
                           <CheckCircle2 className="h-4 w-4" />
-                          <span>Save WhatsApp SMS Credentials & Template</span>
+                          <span>Save {config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'} Credentials & Template</span>
                         </>
                       )}
                     </button>
@@ -561,18 +747,27 @@ export default function WhatsappSmsSettings() {
 
               {/* Card: Test SMS Sender */}
               <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200/80 space-y-4">
-                <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                  <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-600">
-                    <Send className="h-4 w-4" />
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-600">
+                      <Send className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-800">
+                        Send Test WhatsApp Message
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Verify your connection by sending a live test notification
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-extrabold text-slate-800">
-                      Send Test WhatsApp Message
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      Verify your Maytapi connection by sending a live test message to your phone
-                    </p>
-                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
+                    config.provider === 'aisensy'
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    via {config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'}
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -612,7 +807,7 @@ export default function WhatsappSmsSettings() {
                   ) : (
                     <>
                       <Send className="h-4 w-4" />
-                      <span>Send Live Test WhatsApp SMS</span>
+                      <span>Send Live Test WhatsApp SMS (via {config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'})</span>
                     </>
                   )}
                 </button>
@@ -680,7 +875,7 @@ export default function WhatsappSmsSettings() {
                   </p>
                   <ul className="list-disc pl-4 space-y-1 text-[11px]">
                     <li>When an Admin assigns a new <strong>Delegation Task</strong> in Assign Task, the system automatically finds the user's phone number in the <code>Whatsapp</code> users table.</li>
-                    <li>It fills the placeholders with task data and triggers Maytapi WhatsApp API.</li>
+                    <li>It dispatches the notification via the active provider (<strong>{config.provider === 'aisensy' ? 'AiSensy Campaign API' : 'Maytapi WhatsApp API'}</strong>).</li>
                     <li>Delivery status & API responses are automatically logged to the <strong>WhatsApp Log</strong> table below.</li>
                   </ul>
                 </div>
@@ -705,7 +900,7 @@ export default function WhatsappSmsSettings() {
                 <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search by Task ID, Recipient Name, Phone Number, or Message..."
+                  placeholder="Search by Task ID, Recipient Name, Phone Number, Provider, or Message..."
                   value={logSearchQuery}
                   onChange={(e) => setLogSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white"
@@ -784,6 +979,7 @@ export default function WhatsappSmsSettings() {
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-extrabold uppercase text-[10px] tracking-wider">
                       <th className="py-3.5 px-4">Status</th>
+                      <th className="py-3.5 px-4">Provider</th>
                       <th className="py-3.5 px-4">Date & Time</th>
                       <th className="py-3.5 px-4">Task ID</th>
                       <th className="py-3.5 px-4">Recipient</th>
@@ -796,7 +992,7 @@ export default function WhatsappSmsSettings() {
                   <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                     {filteredLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400 space-y-2">
+                        <td colSpan={9} className="py-12 text-center text-slate-400 space-y-2">
                           <MessageSquare className="h-8 w-8 mx-auto text-slate-300" />
                           <p className="font-bold text-slate-500">No WhatsApp SMS logs found</p>
                           <p className="text-xs text-slate-400">
@@ -808,6 +1004,7 @@ export default function WhatsappSmsSettings() {
                       filteredLogs.map((log, idx) => {
                         const isSuccess = (log.status || '').toLowerCase() === 'sent';
                         const createdDate = log.created_at ? new Date(log.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-';
+                        const isAiSensy = (log.provider || '').toLowerCase() === 'aisensy';
 
                         return (
                           <tr key={log.id || idx} className="hover:bg-slate-50/80 transition-colors">
@@ -825,6 +1022,17 @@ export default function WhatsappSmsSettings() {
                                   <AlertCircle className="h-3 w-3 text-rose-600" />
                                 )}
                                 <span>{log.status || (isSuccess ? 'Sent' : 'Failed')}</span>
+                              </span>
+                            </td>
+
+                            {/* Provider */}
+                            <td className="py-3.5 px-4 whitespace-nowrap">
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                isAiSensy
+                                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              }`}>
+                                {isAiSensy ? 'AiSensy' : 'Maytapi'}
                               </span>
                             </td>
 
@@ -848,41 +1056,30 @@ export default function WhatsappSmsSettings() {
                             {/* Phone */}
                             <td className="py-3.5 px-4 whitespace-nowrap font-mono">
                               {log.recipient_phone ? (
-                                <a
-                                  href={`https://wa.me/${log.recipient_phone.replace(/\D/g, '')}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-emerald-600 hover:text-emerald-800 font-bold hover:underline"
-                                >
-                                  <Phone className="h-3 w-3" />
-                                  <span>{log.recipient_phone}</span>
-                                </a>
+                                <span className="text-slate-600">{log.recipient_phone}</span>
                               ) : (
-                                <span className="text-slate-400">-</span>
+                                <span className="text-slate-300 italic">None</span>
                               )}
                             </td>
 
                             {/* Allocated By */}
-                            <td className="py-3.5 px-4 whitespace-nowrap text-slate-600">
-                              {log.allocated_by || 'Admin'}
+                            <td className="py-3.5 px-4 whitespace-nowrap text-slate-600 font-medium">
+                              {log.allocated_by || '-'}
                             </td>
 
                             {/* Message Preview */}
-                            <td className="py-3.5 px-4 max-w-[280px]">
-                              <p className="truncate text-slate-500 font-mono text-[11px]" title={log.message}>
-                                {log.message || '-'}
-                              </p>
+                            <td className="py-3.5 px-4 max-w-xs truncate text-slate-600 font-sans" title={log.message}>
+                              {log.message ? log.message.slice(0, 70) + (log.message.length > 70 ? '...' : '') : '-'}
                             </td>
 
-                            {/* Action / View */}
+                            {/* Action: View Modal */}
                             <td className="py-3.5 px-4 text-center whitespace-nowrap">
                               <button
                                 type="button"
                                 onClick={() => setSelectedLogForModal(log)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition-all cursor-pointer"
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition-colors cursor-pointer"
                               >
-                                <Eye className="h-3 w-3" />
-                                <span>Details</span>
+                                View Details
                               </button>
                             </td>
 
@@ -899,19 +1096,26 @@ export default function WhatsappSmsSettings() {
         )}
 
         {/* ========================================================================= */}
-        {/* MODAL: LOG DETAILS POPUP                                                  */}
+        {/* MODAL: LOG DETAILS VIEWER                                                 */}
         {/* ========================================================================= */}
         {selectedLogForModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-4 p-6 md:p-7">
+            <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden space-y-4 p-6 md:p-8">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                    <MessageSquare className="h-4 w-4" />
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-xl ${
+                    (selectedLogForModal.status || '').toLowerCase() === 'sent' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                  }`}>
+                    <MessageSquare className="h-5 w-5" />
                   </div>
-                  <h3 className="text-base font-extrabold text-slate-800">
-                    WhatsApp Message Log Details
-                  </h3>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-800">
+                      WhatsApp Delivery Details
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Task ID: #{selectedLogForModal.task_id || 'N/A'} &bull; Provider: {selectedLogForModal.provider || 'Maytapi'}
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -922,52 +1126,54 @@ export default function WhatsappSmsSettings() {
                 </button>
               </div>
 
-              <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-200/60">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold">Task ID</span>
-                    <span className="font-mono font-extrabold text-indigo-700">#{selectedLogForModal.task_id || '-'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold">Status</span>
-                    <span className={`font-bold ${selectedLogForModal.status === 'Sent' ? 'text-emerald-700' : 'text-rose-700'}`}>
-                      {selectedLogForModal.status || 'Sent'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold">Recipient</span>
-                    <span className="font-bold text-slate-800">{selectedLogForModal.recipient_name || '-'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] font-bold">Phone</span>
-                    <span className="font-mono font-bold text-emerald-700">{selectedLogForModal.recipient_phone || '-'}</span>
-                  </div>
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                <div>
+                  <span className="text-slate-400 font-semibold block text-[10px]">Recipient:</span>
+                  <span className="font-bold text-slate-800">{selectedLogForModal.recipient_name || '-'}</span>
                 </div>
-
-                {/* Message Body */}
-                <div className="space-y-1">
-                  <span className="font-bold text-slate-700">Message Content:</span>
-                  <div className="p-3.5 rounded-2xl bg-[#e5ddd5] text-slate-900 border border-slate-300/80 font-sans text-xs whitespace-pre-wrap leading-relaxed shadow-inner">
-                    {selectedLogForModal.message}
-                  </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block text-[10px]">Phone Number:</span>
+                  <span className="font-mono font-bold text-slate-800">{selectedLogForModal.recipient_phone || '-'}</span>
                 </div>
-
-                {/* Error details if failed */}
-                {selectedLogForModal.error && (
-                  <div className="space-y-1">
-                    <span className="font-bold text-rose-700">Error / Response:</span>
-                    <pre className="p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 font-mono text-[10px] whitespace-pre-wrap max-h-32 overflow-y-auto">
-                      {selectedLogForModal.error}
-                    </pre>
-                  </div>
-                )}
+                <div>
+                  <span className="text-slate-400 font-semibold block text-[10px]">Allocated By:</span>
+                  <span className="font-bold text-slate-800">{selectedLogForModal.allocated_by || '-'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block text-[10px]">Status:</span>
+                  <span className={`font-bold ${
+                    (selectedLogForModal.status || '').toLowerCase() === 'sent' ? 'text-emerald-600' : 'text-rose-600'
+                  }`}>
+                    {selectedLogForModal.status || 'Sent'}
+                  </span>
+                </div>
               </div>
 
-              <div className="pt-2 flex justify-end">
+              {/* Message Content */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-bold text-slate-700">Message Dispatched:</span>
+                <div className="p-3.5 rounded-2xl bg-slate-900 text-slate-200 font-mono text-[11px] leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                  {selectedLogForModal.message || 'No message recorded'}
+                </div>
+              </div>
+
+              {/* API Response / Error Details */}
+              {(selectedLogForModal.error || selectedLogForModal.response) && (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-slate-700">API Response / Debug Trace:</span>
+                  <pre className="p-3 rounded-2xl bg-slate-100 text-slate-700 font-mono text-[10px] overflow-x-auto max-h-36">
+                    {selectedLogForModal.error 
+                      ? selectedLogForModal.error 
+                      : JSON.stringify(selectedLogForModal.response, null, 2)}
+                  </pre>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => setSelectedLogForModal(null)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition-all"
+                  className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition-all"
                 >
                   Close
                 </button>
@@ -989,7 +1195,7 @@ export default function WhatsappSmsSettings() {
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-slate-800">
-                      Supabase SQL Setup for WhatsApp Logs
+                      Supabase SQL Setup for WhatsApp Logs & Settings
                     </h3>
                     <p className="text-xs text-slate-400">
                       Create `whatsapp_logs` & `whatsapp_settings` tables in your Supabase project
