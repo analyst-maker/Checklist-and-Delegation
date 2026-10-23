@@ -16,11 +16,15 @@ import {
   sendWhatsappSMS,
   sendMaytapiSMS,
   sendAisensySMS,
+  sendDelegationTaskSMS,
+  sendDelegationDoneSMS,
   getWhatsappLogs, 
   clearWhatsappLogs, 
   generateDelegationMessage,
+  generateDelegationDoneMessage,
   formatPhoneNumber,
-  DEFAULT_TEMPLATE
+  DEFAULT_TEMPLATE,
+  DEFAULT_TASK_DONE_TEMPLATE
 } from '../../utils/whatsappService';
 
 const SQL_SETUP_SCRIPT = `-- ==============================================================================
@@ -71,6 +75,8 @@ GRANT ALL ON TABLE public.whatsapp_settings TO anon, authenticated, service_role
 
 export default function WhatsappSmsSettings() {
   const [activeTab, setActiveTab] = useState('settings'); // 'settings' | 'logs'
+  const [templateTab, setTemplateTab] = useState('assigned'); // 'assigned' | 'done'
+  const [testType, setTestType] = useState('assigned'); // 'assigned' | 'done'
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -87,10 +93,12 @@ export default function WhatsappSmsSettings() {
     // AiSensy
     aisensyApiKey: '',
     aisensyCampaignName: '',
+    aisensyDoneCampaignName: '',
     aisensyApiUrl: 'https://backend.aisensy.com/campaign/t1/api/v2',
     // Global
     enabled: true,
     template: '',
+    templateTaskDone: '',
   });
 
   const [showToken, setShowToken] = useState(false);
@@ -100,7 +108,7 @@ export default function WhatsappSmsSettings() {
 
   // Test SMS State
   const [testNumber, setTestNumber] = useState('');
-  const [testRecipientName, setTestRecipientName] = useState('Test User');
+  const [testRecipientName, setTestRecipientName] = useState('Rajesh Kumar');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
@@ -121,7 +129,10 @@ export default function WhatsappSmsSettings() {
           ...currentConfig,
           template: (!currentConfig.template || currentConfig.template === 'test' || currentConfig.template === 'Default Template') 
             ? DEFAULT_TEMPLATE 
-            : currentConfig.template
+            : currentConfig.template,
+          templateTaskDone: (!currentConfig.templateTaskDone || currentConfig.templateTaskDone === 'test')
+            ? DEFAULT_TASK_DONE_TEMPLATE
+            : currentConfig.templateTaskDone,
         });
         const logData = await getWhatsappLogs();
         setLogs(logData);
@@ -182,30 +193,40 @@ export default function WhatsappSmsSettings() {
       apiUrl: (config.apiUrl || 'https://api.maytapi.com/api').trim(),
       aisensyApiKey: (config.aisensyApiKey || '').trim(),
       aisensyCampaignName: (config.aisensyCampaignName || '').trim(),
+      aisensyDoneCampaignName: (config.aisensyDoneCampaignName || '').trim(),
       aisensyApiUrl: (config.aisensyApiUrl || 'https://backend.aisensy.com/campaign/t1/api/v2').trim(),
     };
 
     const dummyTask = {
       'Task ID': 'TEST-999',
-      'Given By': 'System Admin',
-      Name: (testRecipientName || 'Test User').trim(),
-      'Task Description': `Test automated WhatsApp message via ${cleanConfig.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'}`,
+      'Given By': testType === 'done' ? (testRecipientName || 'Director') : 'Piramal Director',
+      Name: testType === 'done' ? 'Rajesh Kumar' : (testRecipientName || 'Rajesh Kumar'),
+      'Task Description': 'Complete GST Reconciliation and upload invoice verification sheet',
       'Task Start Date': new Date().toLocaleDateString('en-GB'),
+      'Completion Date': new Date().toLocaleDateString('en-GB'),
+      Remarks: 'Invoice verification verified successfully',
+      Attachment: 'https://res.cloudinary.com/sample/image/upload/v1/invoice_proof.jpg',
     };
 
-    const previewMsg = generateDelegationMessage(dummyTask, cleanConfig.template);
-
     try {
-      const res = await sendWhatsappSMS({
-        toNumber: cleanNumber,
-        message: previewMsg,
-        taskId: 'TEST-999',
-        recipientName: testRecipientName,
-        allocatedBy: 'Admin (Test)',
-        taskDescription: dummyTask['Task Description'],
-        startDate: dummyTask['Task Start Date'],
-        configOverride: cleanConfig,
-      });
+      let res;
+      if (testType === 'done') {
+        // Send Task Completed notification to Given By
+        const previewMsg = generateDelegationDoneMessage(dummyTask, cleanConfig.templateTaskDone);
+        res = await sendDelegationDoneSMS({
+          ...dummyTask,
+          'Given By Phone': cleanNumber,
+          configOverride: cleanConfig,
+        });
+      } else {
+        // Send Task Assigned notification to Doer
+        const previewMsg = generateDelegationMessage(dummyTask, cleanConfig.template);
+        res = await sendDelegationTaskSMS({
+          ...dummyTask,
+          Number: cleanNumber,
+          configOverride: cleanConfig,
+        });
+      }
 
       setTestResult(res);
 
@@ -295,8 +316,14 @@ export default function WhatsappSmsSettings() {
     Name: 'Rajesh Kumar',
     'Task Description': 'Complete GST Reconciliation and upload invoice verification sheet',
     'Task Start Date': '15/10/2026',
+    'Completion Date': new Date().toLocaleDateString('en-GB'),
+    Remarks: 'Reconciliation uploaded to portal',
+    Attachment: 'https://res.cloudinary.com/sample/image/upload/v1/invoice_proof.jpg',
   };
-  const livePreviewText = generateDelegationMessage(sampleTask, config.template);
+
+  const livePreviewText = templateTab === 'done'
+    ? generateDelegationDoneMessage(sampleTask, config.templateTaskDone || DEFAULT_TASK_DONE_TEMPLATE)
+    : generateDelegationMessage(sampleTask, config.template || DEFAULT_TEMPLATE);
 
   const isMaytapiConfigured = Boolean(config.productId && config.phoneId && config.token);
   const isAisensyConfigured = Boolean(config.aisensyApiKey && config.aisensyCampaignName);
@@ -332,7 +359,7 @@ export default function WhatsappSmsSettings() {
                 )}
               </h1>
               <p className="text-slate-300 text-sm max-w-2xl">
-                Automatically send instant WhatsApp notifications to assignees via <strong>{config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'}</strong> whenever a new Delegation Task is created, and monitor real-time delivery logs.
+                Automatically send instant WhatsApp notifications to assignees upon task assignment, and notify <strong>Given By / Allocator</strong> when a Delegation Task is completed.
               </p>
             </div>
 
@@ -387,7 +414,7 @@ export default function WhatsappSmsSettings() {
               }`}
             >
               <Key className="h-4 w-4" />
-              <span>Provider Credentials & Template</span>
+              <span>Provider Credentials & Templates</span>
             </button>
 
             <button
@@ -410,7 +437,7 @@ export default function WhatsappSmsSettings() {
         </div>
 
         {/* ========================================================================= */}
-        {/* TAB 1: CREDENTIALS & TEMPLATE CONFIGURATION                               */}
+        {/* TAB 1: CREDENTIALS & TEMPLATES CONFIGURATION                              */}
         {/* ========================================================================= */}
         {activeTab === 'settings' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -422,7 +449,7 @@ export default function WhatsappSmsSettings() {
               {saveSuccess && (
                 <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-2 shadow-sm animate-in fade-in">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>WhatsApp SMS credentials & template saved successfully!</span>
+                  <span>WhatsApp SMS credentials & templates saved successfully!</span>
                 </div>
               )}
               {saveError && (
@@ -611,12 +638,12 @@ export default function WhatsappSmsSettings() {
                       {/* API Key */}
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-slate-700">
-                          AiSensy API Key <span className="text-rose-500">*</span>
+                          AiSensy API Key (API Campaign Key) <span className="text-rose-500">*</span>
                         </label>
                         <div className="relative">
                           <input
                             type={showAisensyKey ? "text" : "password"}
-                            placeholder="Enter AiSensy API Key (from Manage > API Key)..."
+                            placeholder="Enter AiSensy API Campaign Key (from Manage > API Key)..."
                             value={config.aisensyApiKey}
                             onChange={(e) => setConfig(prev => ({ ...prev, aisensyApiKey: e.target.value.trim() }))}
                             className="w-full px-3.5 py-2.5 pr-10 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
@@ -631,26 +658,45 @@ export default function WhatsappSmsSettings() {
                           </button>
                         </div>
                         <p className="text-[10px] text-slate-400">
-                          Find this on your AiSensy Dashboard under <strong>Manage &gt; API Key</strong>
+                          AiSensy Dashboard me <strong>API Campaign Key</strong> tab se copy karein
                         </p>
                       </div>
 
-                      {/* Campaign Name */}
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-700">
-                          Campaign Name <span className="text-rose-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. task_delegation_reminder (Status must be Live in AiSensy)"
-                          value={config.aisensyCampaignName}
-                          onChange={(e) => setConfig(prev => ({ ...prev, aisensyCampaignName: e.target.value.trim() }))}
-                          className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
-                          required={config.enabled && config.provider === 'aisensy'}
-                        />
-                        <p className="text-[10px] text-slate-400">
-                          The exact pre-approved campaign name created in AiSensy dashboard linked to your WhatsApp template.
-                        </p>
+                      {/* Campaign Name 1: Task Assignment */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700">
+                            Task Assigned Campaign Name <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. task_delegation_reminder"
+                            value={config.aisensyCampaignName}
+                            onChange={(e) => setConfig(prev => ({ ...prev, aisensyCampaignName: e.target.value.trim() }))}
+                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                            required={config.enabled && config.provider === 'aisensy'}
+                          />
+                          <p className="text-[10px] text-slate-400">
+                            Task allocate hone par Doer ko SMS bhejne wali campaign
+                          </p>
+                        </div>
+
+                        {/* Campaign Name 2: Task Completion */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-700">
+                            Task Completed Campaign Name <span className="text-slate-400 font-normal">(Optional)</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. task_completed_notification (optional)"
+                            value={config.aisensyDoneCampaignName}
+                            onChange={(e) => setConfig(prev => ({ ...prev, aisensyDoneCampaignName: e.target.value.trim() }))}
+                            className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                          />
+                          <p className="text-[10px] text-slate-400">
+                            Khali chhodne par upar wali main campaign use hogi
+                          </p>
+                        </div>
                       </div>
 
                       {/* API Base URL */}
@@ -667,59 +713,136 @@ export default function WhatsappSmsSettings() {
                       </div>
 
                       {/* Template Variable Mapping Info */}
-                      <div className="p-3 bg-white rounded-xl border border-indigo-100 text-slate-700 space-y-1.5 text-xs">
+                      <div className="p-3 bg-white rounded-xl border border-indigo-100 text-slate-700 space-y-2 text-xs">
                         <p className="font-bold text-indigo-900 flex items-center gap-1.5">
                           <Zap className="h-3.5 w-3.5 text-indigo-600" />
-                          <span>AiSensy Template Parameters Mapping:</span>
+                          <span>AiSensy Meta Template Parameters Mapping:</span>
                         </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-mono text-slate-600 pt-1">
-                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{1}}`}</code> &rarr; Recipient Name</span>
-                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{2}}`}</code> &rarr; Task ID</span>
-                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{3}}`}</code> &rarr; Allocated By</span>
-                          <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{4}}`}</code> &rarr; Task Description</span>
-                          <span className="p-1 rounded bg-slate-50 border border-slate-100 col-span-full"><code>{`{{5}}`}</code> &rarr; Deadline (Task Start Date)</span>
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-extrabold uppercase text-indigo-800 tracking-wider block">1. Task Assignment Template (To Doer):</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] font-mono text-slate-600">
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{1}}`}</code> &rarr; Recipient Name</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{2}}`}</code> &rarr; Task ID</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{3}}`}</code> &rarr; Allocated By</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{4}}`}</code> &rarr; Task Description</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100 col-span-full"><code>{`{{5}}`}</code> &rarr; Deadline (Start Date)</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                          <span className="text-[10px] font-extrabold uppercase text-emerald-800 tracking-wider block">2. Task Completed Template (To Given By / Creator):</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[11px] font-mono text-slate-600">
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{1}}`}</code> &rarr; Given By (Creator Name)</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{2}}`}</code> &rarr; Task ID</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{3}}`}</code> &rarr; Completed By (Doer Name)</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{4}}`}</code> &rarr; Task Description</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100"><code>{`{{5}}`}</code> &rarr; Completion Date</span>
+                            <span className="p-1 rounded bg-slate-50 border border-slate-100 col-span-full"><code>{`{{6}}`}</code> &rarr; Attachment Link ($(Attachment))</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Message Template */}
-                  <div className="space-y-1.5 pt-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <FileText className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>Delegation Task Message Template</span>
-                      </label>
+                  {/* ========================================================= */}
+                  {/* MESSAGE TEMPLATES SECTION (Dual Tab: Assign vs Completed) */}
+                  {/* ========================================================= */}
+                  <div className="space-y-2 pt-2">
+                    
+                    {/* Template Switcher Tabs */}
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTemplateTab('assigned')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                            templateTab === 'assigned'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          1. Task Assigned (To Doer)
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setTemplateTab('done')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                            templateTab === 'done'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                        >
+                          2. Task Completed (To Given By)
+                        </button>
+                      </div>
+
                       <button
                         type="button"
-                        onClick={() => setConfig(prev => ({ ...prev, template: DEFAULT_TEMPLATE }))}
+                        onClick={() => {
+                          if (templateTab === 'done') {
+                            setConfig(prev => ({ ...prev, templateTaskDone: DEFAULT_TASK_DONE_TEMPLATE }));
+                          } else {
+                            setConfig(prev => ({ ...prev, template: DEFAULT_TEMPLATE }));
+                          }
+                        }}
                         className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline cursor-pointer"
                       >
                         Reset to Skyler World Template
                       </button>
                     </div>
-                    <textarea
-                      rows={8}
-                      value={config.template}
-                      onChange={(e) => setConfig(prev => ({ ...prev, template: e.target.value }))}
-                      className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all leading-relaxed"
-                      placeholder="Enter WhatsApp message template..."
-                    />
-                    
-                    {/* Placeholder badges */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      <span className="text-[10px] font-bold text-slate-400 mr-1">Available Tags:</span>
-                      {['$(Name)', '$(Task ID)', '$(Given By)', '$(Task Description)', '$(Task Start Date)'].map(tag => (
-                        <button
-                          key={tag}
-                          type="button"
-                          onClick={() => setConfig(prev => ({ ...prev, template: `${prev.template} ${tag}` }))}
-                          className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 font-mono text-[10px] font-bold transition-all cursor-pointer"
-                        >
-                          + {tag}
-                        </button>
-                      ))}
-                    </div>
+
+                    {/* Textarea for Selected Template */}
+                    {templateTab === 'assigned' ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          rows={8}
+                          value={config.template}
+                          onChange={(e) => setConfig(prev => ({ ...prev, template: e.target.value }))}
+                          className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all leading-relaxed"
+                          placeholder="Enter Task Assignment WhatsApp template..."
+                        />
+                        {/* Placeholder badges */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className="text-[10px] font-bold text-slate-400 mr-1">Available Tags:</span>
+                          {['$(Name)', '$(Task ID)', '$(Given By)', '$(Task Description)', '$(Task Start Date)'].map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setConfig(prev => ({ ...prev, template: `${prev.template} ${tag}` }))}
+                              className="px-2 py-0.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 font-mono text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              + {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <textarea
+                          rows={8}
+                          value={config.templateTaskDone}
+                          onChange={(e) => setConfig(prev => ({ ...prev, templateTaskDone: e.target.value }))}
+                          className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-mono font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all leading-relaxed"
+                          placeholder="Enter Task Completed WhatsApp template..."
+                        />
+                        {/* Placeholder badges */}
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                          <span className="text-[10px] font-bold text-slate-400 mr-1">Available Tags:</span>
+                          {['$(Given By)', '$(Name)', '$(Task ID)', '$(Task Description)', '$(Completion Date)', '$(Remarks)', '$(Attachment)'].map(tag => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setConfig(prev => ({ ...prev, templateTaskDone: `${prev.templateTaskDone} ${tag}` }))}
+                              className="px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/60 font-mono text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              + {tag}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                   </div>
 
                   {/* Submit Button */}
@@ -732,12 +855,12 @@ export default function WhatsappSmsSettings() {
                       {saving ? (
                         <>
                           <RefreshCw className="h-4 w-4 animate-spin" />
-                          <span>Saving Credentials...</span>
+                          <span>Saving Credentials & Templates...</span>
                         </>
                       ) : (
                         <>
                           <CheckCircle2 className="h-4 w-4" />
-                          <span>Save {config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'} Credentials & Template</span>
+                          <span>Save {config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'} Credentials & Templates</span>
                         </>
                       )}
                     </button>
@@ -770,6 +893,35 @@ export default function WhatsappSmsSettings() {
                   </span>
                 </div>
 
+                {/* Test Notification Type Selector */}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Choose Notification to Test:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setTestType('assigned'); setTemplateTab('assigned'); }}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                        testType === 'assigned'
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Task Assigned (To Doer)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setTestType('done'); setTemplateTab('done'); }}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                        testType === 'done'
+                          ? 'bg-indigo-50 border-indigo-300 text-indigo-800 shadow-xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Task Completed (To Given By)
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-600">Recipient Phone Number</label>
@@ -782,10 +934,12 @@ export default function WhatsappSmsSettings() {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-600">Recipient Name</label>
+                    <label className="text-xs font-bold text-slate-600">
+                      {testType === 'done' ? 'Given By Name (Receiver)' : 'Doer Name (Receiver)'}
+                    </label>
                     <input
                       type="text"
-                      placeholder="e.g. Amit Sharma"
+                      placeholder="e.g. Rajesh Kumar"
                       value={testRecipientName}
                       onChange={(e) => setTestRecipientName(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
@@ -807,7 +961,7 @@ export default function WhatsappSmsSettings() {
                   ) : (
                     <>
                       <Send className="h-4 w-4" />
-                      <span>Send Live Test WhatsApp SMS (via {config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'})</span>
+                      <span>Send Live Test WhatsApp ({testType === 'done' ? 'Task Completed' : 'Task Assigned'})</span>
                     </>
                   )}
                 </button>
@@ -850,7 +1004,7 @@ export default function WhatsappSmsSettings() {
                     <span>Live WhatsApp Notification Preview</span>
                   </div>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold uppercase">
-                    Sample Task
+                    {templateTab === 'done' ? 'Task Completed' : 'Task Assigned'}
                   </span>
                 </div>
 
@@ -871,12 +1025,12 @@ export default function WhatsappSmsSettings() {
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 text-xs space-y-2 leading-relaxed">
                   <p className="font-bold text-slate-800 flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                    <span>How Automated SMS Works:</span>
+                    <span>How Automated WhatsApp Notifications Work:</span>
                   </p>
-                  <ul className="list-disc pl-4 space-y-1 text-[11px]">
-                    <li>When an Admin assigns a new <strong>Delegation Task</strong> in Assign Task, the system automatically finds the user's phone number in the <code>Whatsapp</code> users table.</li>
-                    <li>It dispatches the notification via the active provider (<strong>{config.provider === 'aisensy' ? 'AiSensy Campaign API' : 'Maytapi WhatsApp API'}</strong>).</li>
-                    <li>Delivery status & API responses are automatically logged to the <strong>WhatsApp Log</strong> table below.</li>
+                  <ul className="list-disc pl-4 space-y-1.5 text-[11px]">
+                    <li><strong>Task Assigned:</strong> Jab Admin naya Delegation Task assign karta hai, assigned Doer ko instant WhatsApp reminder chala jata hai.</li>
+                    <li><strong>Task Completed:</strong> Jab task <strong>Done / Admin Done</strong> ho jata hai, task dene wale (<strong>Given By / Allocator</strong>) ko task complete hone ka automated WhatsApp notification chala jata hai.</li>
+                    <li>Both notifications active provider (<strong>{config.provider === 'aisensy' ? 'AiSensy' : 'Maytapi'}</strong>) ke through dispatch hote hain aur delivery logs me record hote hain.</li>
                   </ul>
                 </div>
               </div>
@@ -996,7 +1150,7 @@ export default function WhatsappSmsSettings() {
                           <MessageSquare className="h-8 w-8 mx-auto text-slate-300" />
                           <p className="font-bold text-slate-500">No WhatsApp SMS logs found</p>
                           <p className="text-xs text-slate-400">
-                            {logSearchQuery ? 'Try adjusting your search criteria.' : 'Logs will appear here automatically when delegation tasks are assigned.'}
+                            {logSearchQuery ? 'Try adjusting your search criteria.' : 'Logs will appear here automatically when delegation tasks are assigned or completed.'}
                           </p>
                         </td>
                       </tr>

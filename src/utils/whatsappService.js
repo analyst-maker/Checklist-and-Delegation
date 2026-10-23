@@ -15,6 +15,23 @@ Please make sure the task is completed before the deadline. For any assistance, 
 Best regards,
 Skyler World`;
 
+export const DEFAULT_TASK_DONE_TEMPLATE = `✅ *TASK COMPLETED NOTIFICATION*
+Dear $(Given By),
+
+The delegation task assigned by you has been completed. Details below:
+
+📌 Task ID: $(Task ID)
+🧑💼 Completed By: $(Name)
+📝 Task Description: $(Task Description)
+📅 Completion Date: $(Completion Date)
+💬 Remarks: $(Remarks)
+📎 Attachment: $(Attachment)
+
+You can review the task details in the Delegation portal.
+
+Best regards,
+Skyler World`;
+
 const LOCAL_STORAGE_CONFIG_KEY = 'maytapi_whatsapp_config_v1';
 const LOCAL_STORAGE_EXTENDED_KEY = 'whatsapp_sms_config_v2';
 const LOCAL_STORAGE_LOGS_KEY = 'maytapi_whatsapp_logs_v1';
@@ -33,9 +50,11 @@ export const getWhatsappConfig = async () => {
     // AiSensy credentials
     aisensyApiKey: '',
     aisensyCampaignName: '',
+    aisensyDoneCampaignName: '',
     aisensyApiUrl: 'https://backend.aisensy.com/campaign/t1/api/v2',
     enabled: true,
     template: DEFAULT_TEMPLATE,
+    templateTaskDone: DEFAULT_TASK_DONE_TEMPLATE,
   };
 
   // 1. Read from localStorage (v2 first, fallback to v1)
@@ -63,9 +82,9 @@ export const getWhatsappConfig = async () => {
       const defaultRow = data.find((r) => r.id === 'default');
       const maytapiRow = data.find((r) => r.id === 'maytapi');
       const aisensyRow = data.find((r) => r.id === 'aisensy');
+      const taskDoneRow = data.find((r) => r.id === 'task_done');
 
       if (defaultRow) {
-        // If product_id indicates the active provider ('aisensy' or 'maytapi')
         const detectedProvider = (defaultRow.product_id === 'aisensy' || defaultRow.product_id === 'maytapi')
           ? defaultRow.product_id
           : localConfig.provider;
@@ -74,7 +93,7 @@ export const getWhatsappConfig = async () => {
         localConfig.enabled = defaultRow.enabled !== undefined ? Boolean(defaultRow.enabled) : localConfig.enabled;
         localConfig.template = defaultRow.template || localConfig.template;
 
-        // Backward compatibility: if defaultRow holds old Maytapi credentials
+        // Backward compatibility
         if (defaultRow.product_id && defaultRow.product_id !== 'aisensy' && defaultRow.product_id !== 'maytapi') {
           localConfig.productId = defaultRow.product_id || localConfig.productId;
           localConfig.phoneId = defaultRow.phone_id || localConfig.phoneId;
@@ -96,12 +115,19 @@ export const getWhatsappConfig = async () => {
         localConfig.aisensyApiUrl = aisensyRow.api_url || localConfig.aisensyApiUrl;
       }
 
+      if (taskDoneRow) {
+        localConfig.templateTaskDone = taskDoneRow.template || localConfig.templateTaskDone;
+        if (taskDoneRow.product_id) {
+          localConfig.aisensyDoneCampaignName = taskDoneRow.product_id;
+        }
+      }
+
       // Keep localStorage in sync
       localStorage.setItem(LOCAL_STORAGE_EXTENDED_KEY, JSON.stringify(localConfig));
       localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(localConfig));
     }
   } catch (e) {
-    // Table may not exist or network unavailable; continue with localConfig
+    // Continue with localConfig
   }
 
   return localConfig;
@@ -124,9 +150,11 @@ export const saveWhatsappConfig = async (config) => {
     apiUrl: (config.apiUrl || 'https://api.maytapi.com/api').trim(),
     aisensyApiKey: (config.aisensyApiKey || '').trim(),
     aisensyCampaignName: (config.aisensyCampaignName || '').trim(),
+    aisensyDoneCampaignName: (config.aisensyDoneCampaignName || '').trim(),
     aisensyApiUrl: (config.aisensyApiUrl || 'https://backend.aisensy.com/campaign/t1/api/v2').trim(),
     enabled: Boolean(config.enabled),
     template: config.template || DEFAULT_TEMPLATE,
+    templateTaskDone: config.templateTaskDone || DEFAULT_TASK_DONE_TEMPLATE,
   };
 
   // 1. Save to localStorage
@@ -176,6 +204,18 @@ export const saveWhatsappConfig = async (config) => {
         updated_at: now,
       }, { onConflict: 'id' });
     }
+
+    // Dedicated Task Done Template record
+    await supabase.from('whatsapp_settings').upsert({
+      id: 'task_done',
+      product_id: merged.aisensyDoneCampaignName || null,
+      phone_id: null,
+      token: null,
+      api_url: null,
+      enabled: merged.enabled,
+      template: merged.templateTaskDone,
+      updated_at: now,
+    }, { onConflict: 'id' });
   } catch (e) {
     console.warn('Could not sync config to Supabase whatsapp_settings table:', e);
   }
@@ -217,7 +257,7 @@ export const getUserPhone = (username, usersList = []) => {
   const target = String(username).trim().toLowerCase();
 
   const matchedUser = (usersList || []).find((u) => {
-    const uName = (u.Username || u['User name'] || '').trim().toLowerCase();
+    const uName = (u.Username || u['User name'] || u.Name || '').trim().toLowerCase();
     return uName === target;
   });
 
@@ -228,7 +268,7 @@ export const getUserPhone = (username, usersList = []) => {
 };
 
 /**
- * Generate formatted WhatsApp message based on template
+ * Generate formatted WhatsApp message for Task Assignment
  */
 export const generateDelegationMessage = (taskData, templateString = DEFAULT_TEMPLATE) => {
   const template = templateString || DEFAULT_TEMPLATE;
@@ -245,6 +285,33 @@ export const generateDelegationMessage = (taskData, templateString = DEFAULT_TEM
     .replace(/\$\(Given By\)/g, givenBy)
     .replace(/\$\(Task Description\)/g, description)
     .replace(/\$\(Task Start Date\)/g, startDate);
+};
+
+/**
+ * Generate formatted WhatsApp message for Task Completion (Sent to Given By)
+ */
+export const generateDelegationDoneMessage = (taskData, templateString = DEFAULT_TASK_DONE_TEMPLATE) => {
+  const template = templateString || DEFAULT_TASK_DONE_TEMPLATE;
+
+  const givenBy = taskData['Given By'] || taskData.givenBy || taskData['Give By'] || 'Admin';
+  const name = taskData.Name || taskData.doer || taskData['Doer Name'] || 'Team Member';
+  const taskId = taskData['Task ID'] || taskData['Task id'] || taskData.taskId || taskData.id || '-';
+  const description = taskData['Task Description'] || taskData.description || taskData['Tast Descriptions'] || '-';
+  const completionDate = taskData['Completion Date'] || taskData.completionDate || taskData.Timestamp || new Date().toLocaleDateString('en-GB');
+  const remarks = taskData.Remarks || taskData.remarks || taskData.Reason || taskData.reason || 'Completed';
+  const rawAttachment = taskData.Attachment || taskData['Upload Image'] || taskData['Upload Imgage'] || taskData.imageUrl || '';
+  const attachment = (typeof rawAttachment === 'string' && rawAttachment.trim().startsWith('http'))
+    ? rawAttachment.trim()
+    : (typeof rawAttachment === 'string' && rawAttachment.trim() ? rawAttachment.trim() : 'Not attached');
+
+  return template
+    .replace(/\$\(Given By\)/g, givenBy)
+    .replace(/\$\(Name\)/g, name)
+    .replace(/\$\(Task ID\)/g, String(taskId))
+    .replace(/\$\(Task Description\)/g, description)
+    .replace(/\$\(Completion Date\)/g, completionDate)
+    .replace(/\$\(Remarks\)/g, remarks)
+    .replace(/\$\(Attachment\)/g, attachment);
 };
 
 /**
@@ -317,7 +384,6 @@ export const recordWhatsappLog = async (logEntry) => {
  * Fetch all WhatsApp logs from Supabase or localStorage
  */
 export const getWhatsappLogs = async () => {
-  // 1. Attempt fetching from Supabase
   try {
     const { data, error } = await supabase
       .from('whatsapp_logs')
@@ -348,7 +414,6 @@ export const getWhatsappLogs = async () => {
     console.warn('Could not fetch logs from Supabase:', e);
   }
 
-  // 2. Fallback to localStorage
   try {
     const local = JSON.parse(localStorage.getItem(LOCAL_STORAGE_LOGS_KEY) || '[]');
     return local.map((log) => ({
@@ -512,7 +577,9 @@ export const sendAisensySMS = async ({
   allocatedBy = '',
   taskDescription = '',
   startDate = '',
+  mediaUrl = null,
   templateParams = null,
+  campaignNameOverride = null,
   configOverride = null,
 }) => {
   const config = configOverride || (await getWhatsappConfig());
@@ -523,7 +590,8 @@ export const sendAisensySMS = async ({
   }
 
   const apiKey = String(config?.aisensyApiKey || '').trim();
-  const campaignName = String(config?.aisensyCampaignName || '').trim();
+  const rawCampaign = campaignNameOverride || config?.aisensyCampaignName || '';
+  const campaignName = String(rawCampaign).trim();
   const apiUrl = String(config?.aisensyApiUrl || 'https://backend.aisensy.com/campaign/t1/api/v2').trim();
 
   if (!apiKey || !campaignName) {
@@ -562,7 +630,7 @@ export const sendAisensySMS = async ({
   // Ensure destination format (+91XXXXXXXXXX)
   const destination = formattedNumber.startsWith('+') ? formattedNumber : `+${formattedNumber}`;
 
-  // Build template parameters for AiSensy placeholders: {{1}}, {{2}}, {{3}}, {{4}}, {{5}}
+  // Build template parameters for AiSensy placeholders
   const params = (Array.isArray(templateParams) && templateParams.length > 0)
     ? templateParams
     : [
@@ -582,6 +650,13 @@ export const sendAisensySMS = async ({
     source: 'Task Delegation System',
     tags: ['Task Delegation']
   };
+
+  if (mediaUrl && String(mediaUrl).startsWith('http')) {
+    payload.media = {
+      url: String(mediaUrl).trim(),
+      filename: 'task_attachment.jpg'
+    };
+  }
 
   try {
     console.log(`Sending WhatsApp SMS via AiSensy to ${destination} (Campaign: ${campaignName})...`);
@@ -660,17 +735,16 @@ export const sendWhatsappSMS = async (options) => {
 };
 
 /**
- * Send WhatsApp SMS specifically when a new Delegation Task is created
+ * Send WhatsApp SMS specifically when a new Delegation Task is created (Sent to Doer/Assignee)
  */
 export const sendDelegationTaskSMS = async (taskData, usersList = []) => {
   try {
-    const config = await getWhatsappConfig();
+    const config = taskData?.configOverride || (await getWhatsappConfig());
     if (!config.enabled) return { success: false, skipped: true };
 
     const recipientName = taskData.Name || taskData.doer || '';
     let phoneNumber = taskData.Number || taskData.phone || null;
 
-    // If phone number not present in taskData, search in Whatsapp table usersList or Supabase
     if (!phoneNumber && recipientName) {
       phoneNumber = getUserPhone(recipientName, usersList);
 
@@ -700,7 +774,7 @@ export const sendDelegationTaskSMS = async (taskData, usersList = []) => {
     return await sendWhatsappSMS({
       toNumber: phoneNumber,
       message,
-      taskId,
+      taskId: String(taskId),
       recipientName,
       allocatedBy,
       taskDescription,
@@ -709,6 +783,88 @@ export const sendDelegationTaskSMS = async (taskData, usersList = []) => {
     });
   } catch (error) {
     console.error('Error in sendDelegationTaskSMS:', error);
+    return { success: false, error: error.message || error };
+  }
+};
+
+/**
+ * Send WhatsApp SMS specifically when a Delegation Task is COMPLETED (Sent to Given By / Creator)
+ */
+export const sendDelegationDoneSMS = async (taskData, usersList = []) => {
+  try {
+    const config = taskData?.configOverride || (await getWhatsappConfig());
+    if (!config.enabled) return { success: false, skipped: true };
+
+    const givenByName = taskData['Given By'] || taskData.givenBy || taskData['Give By'] || '';
+    if (!givenByName) {
+      console.warn('Cannot send completion SMS: Given By is missing');
+      return { success: false, skipped: true, error: 'Given By is missing' };
+    }
+
+    let phoneNumber = taskData['Given By Phone'] || taskData.givenByPhone || null;
+
+    if (!phoneNumber) {
+      phoneNumber = getUserPhone(givenByName, usersList);
+
+      if (!phoneNumber) {
+        try {
+          const { data: uData } = await supabase
+            .from('Whatsapp')
+            .select('Number, Username')
+            .ilike('Username', givenByName.trim())
+            .maybeSingle();
+
+          if (uData && uData.Number) {
+            phoneNumber = uData.Number;
+          }
+        } catch (e) {
+          console.warn('Could not query Given By phone from Supabase:', e);
+        }
+      }
+    }
+
+    const templateToUse = config.templateTaskDone || DEFAULT_TASK_DONE_TEMPLATE;
+    const message = generateDelegationDoneMessage(taskData, templateToUse);
+    const taskId = taskData['Task ID'] || taskData['Task id'] || taskData.taskId || taskData.id || '';
+    const doerName = taskData.Name || taskData.doer || 'Team Member';
+    const taskDescription = taskData['Task Description'] || taskData.description || '-';
+    const completionDate = taskData['Completion Date'] || taskData.completionDate || taskData.Timestamp || new Date().toLocaleDateString('en-GB');
+    const attachmentUrl = taskData.Attachment || taskData['Upload Image'] || taskData['Upload Imgage'] || taskData.imageUrl || '';
+    const attachmentDisplay = attachmentUrl && String(attachmentUrl).startsWith('http') ? String(attachmentUrl).trim() : 'Not attached';
+
+    // For AiSensy:
+    // {{1}} = Given By (Manager/Admin Name)
+    // {{2}} = Task ID
+    // {{3}} = Completed By (Doer Name)
+    // {{4}} = Task Description
+    // {{5}} = Completion Date
+    // {{6}} = Attachment URL
+    const templateParams = [
+      givenByName,
+      String(taskId || '-'),
+      doerName,
+      taskDescription,
+      completionDate,
+      attachmentDisplay
+    ];
+
+    const campaignToUse = config.aisensyDoneCampaignName || config.aisensyCampaignName;
+
+    return await sendWhatsappSMS({
+      toNumber: phoneNumber,
+      message,
+      taskId: String(taskId),
+      recipientName: givenByName,
+      allocatedBy: doerName,
+      taskDescription,
+      startDate: completionDate,
+      mediaUrl: (attachmentUrl && String(attachmentUrl).startsWith('http')) ? String(attachmentUrl).trim() : null,
+      templateParams,
+      campaignNameOverride: campaignToUse,
+      configOverride: config,
+    });
+  } catch (error) {
+    console.error('Error in sendDelegationDoneSMS:', error);
     return { success: false, error: error.message || error };
   }
 };

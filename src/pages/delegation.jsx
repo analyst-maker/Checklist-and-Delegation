@@ -24,6 +24,7 @@ import {
 import AdminLayout from "../components/layout/AdminLayout";
 import { supabase } from "../lib/supabaseClient";
 import { uploadImageToCloudinary } from "../lib/cloudinary";
+import { sendDelegationDoneSMS } from "../utils/whatsappService";
 
 const CONFIG = {
   APPS_SCRIPT_URL:
@@ -1210,6 +1211,10 @@ function DelegationDataPage() {
           } catch (uploadErr) {
             console.error("Cloudinary upload error:", uploadErr);
           }
+        } else if (typeof item.image === "string" && item.image) {
+          imageUrl = item.image;
+        } else if (item['col15']) {
+          imageUrl = item['col15'];
         }
 
         let formattedNextDate = "";
@@ -1299,6 +1304,22 @@ function DelegationDataPage() {
                   'Admin Done': 'Done'
                 }).eq('Task id', rawTaskId)
               );
+            }
+
+            // Automatically notify Given By when task is completed
+            try {
+              sendDelegationDoneSMS({
+                'Task ID': rawTaskId,
+                'Given By': item['col3'] || 'Admin',
+                'Name': username || item['col4'] || 'Team Member',
+                'Task Description': item['col5'] || '',
+                'Completion Date': new Date().toLocaleDateString('en-GB'),
+                'Remarks': remarksData[id] || item['col14'] || 'Done',
+                'Attachment': imageUrl || item['col15'] || '',
+                'Upload Image': imageUrl || item['col15'] || '',
+              });
+            } catch (smsErr) {
+              console.warn("Automated Done WhatsApp SMS error:", smsErr);
             }
           } else if (currentSelectedStatus === 'Extend date') {
             const nextDateObj = parseToDateObject(formattedNextDate);
@@ -1545,6 +1566,27 @@ function DelegationDataPage() {
       setSuccessMessage(
         `Successfully marked ${selectedHistoryItems.length} items as Admin Done!`
       );
+
+      // Automatically notify Given By when tasks are confirmed as Admin Done
+      for (const historyItem of selectedHistoryItems) {
+        try {
+          const rawTaskId = historyItem.col1 || historyItem['Task id'] || historyItem['Task ID'];
+          const uploadImg = historyItem.col5 || historyItem['Upload Image'] || historyItem['Upload Imgage'] || '';
+          sendDelegationDoneSMS({
+            'Task ID': rawTaskId,
+            'Given By': historyItem.col9 || historyItem['Given By'] || 'Admin',
+            'Name': historyItem.col7 || historyItem['Name'] || 'Team Member',
+            'Task Description': historyItem.col8 || historyItem['Task Description'] || '',
+            'Completion Date': new Date().toLocaleDateString('en-GB'),
+            'Remarks': historyItem.col4 || 'Marked Admin Done',
+            'Attachment': uploadImg,
+            'Upload Image': uploadImg,
+          });
+        } catch (smsErr) {
+          console.warn("Automated Admin Done WhatsApp SMS error:", smsErr);
+        }
+      }
+
       setSelectedHistoryItems([]);
 
       await fetchSheetData();
