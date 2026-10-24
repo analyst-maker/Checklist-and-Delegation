@@ -1124,8 +1124,6 @@ export default function AssignTask() {
         }
       }
 
-      alert(`Successfully created and assigned ${formData.taskType} task in Supabase!`);
-
       // Reset form
       setFormData({
         department: "",
