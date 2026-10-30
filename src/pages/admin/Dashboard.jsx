@@ -583,7 +583,7 @@ export default function AdminDashboard() {
         if (isUserScoped) {
           completedPromises.push(
             supabase.from('Checklist')
-              .select('"Task ID", "Name", "Task Start Date", "Actual", "Leave"')
+              .select('"Task ID", "Name", "Task Start Date", "Actual"')
               .not('Actual', 'is', null)
               .ilike('Name', username.trim())
               .order('Task ID', { ascending: false })
@@ -593,7 +593,7 @@ export default function AdminDashboard() {
           for (let i = 0; i < 7; i++) {
             completedPromises.push(
               supabase.from('Checklist')
-                .select('"Task ID", "Name", "Task Start Date", "Actual", "Leave"')
+                .select('"Task ID", "Name", "Task Start Date", "Actual"')
                 .not('Actual', 'is', null)
                 .order('Task ID', { ascending: false })
                 .range(i * batchSize, (i + 1) * batchSize - 1)
