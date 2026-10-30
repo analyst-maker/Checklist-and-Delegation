@@ -475,7 +475,7 @@ export async function runTaskGenerationTrigger(options = {}) {
     // 3. Fetch existing Checklist tasks to ensure 100% duplicate prevention
     const { data: existingChecklistRows, error: cErr } = await supabase
       .from('Checklist')
-      .select('"Task ID", "Name", "Tast Descriptions", "Task Description", "Task Start Date"')
+      .select('"Task ID", "Name", "Tast Descriptions", "Task Start Date"')
       .order('Task ID', { ascending: false })
       .limit(4000);
 

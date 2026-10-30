@@ -1177,7 +1177,7 @@ export default function AdminSettings() {
       // Fetch checklist tasks to find all templates that already have tasks generated
       const { data: cRows, error: cErr } = await supabase
         .from('Checklist')
-        .select('"Task ID", "Name", "Tast Descriptions", "Task Description", "Task Start Date"')
+        .select('"Task ID", "Name", "Tast Descriptions", "Task Start Date"')
         .order('Task ID', { ascending: false })
         .limit(4000);
       if (cErr) throw cErr;
