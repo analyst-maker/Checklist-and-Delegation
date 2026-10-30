@@ -1006,12 +1006,29 @@ function DelegationDataPage() {
   // Real-time synchronization: Instant updates via Supabase WebSockets (Ultra-Low Egress)
   useEffect(() => {
     let debounceTimer;
+    let staleWhileHidden = false;
+
+    // Never fetch for a hidden tab; remember it and refresh once on return.
+    const refresh = () => {
+      if (document.hidden) {
+        staleWhileHidden = true;
+        return;
+      }
+      fetchSheetData(true);
+    };
+
     const debouncedFetch = () => {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        fetchSheetData(true);
-      }, 800);
+      debounceTimer = setTimeout(refresh, 3000);
     };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden && staleWhileHidden) {
+        staleWhileHidden = false;
+        fetchSheetData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     // Listen only to actual database changes instead of polling 10,000 rows every 15 seconds
     const channel = supabase
@@ -1021,13 +1038,12 @@ function DelegationDataPage() {
       .subscribe();
 
     // Safety fallback: Long 5-minute interval instead of 15 seconds (saves ~95% egress)
-    const fallbackInterval = setInterval(() => {
-      fetchSheetData(true);
-    }, 5 * 60 * 1000);
+    const fallbackInterval = setInterval(refresh, 5 * 60 * 1000);
 
     return () => {
       clearTimeout(debounceTimer);
       clearInterval(fallbackInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, [fetchSheetData]);

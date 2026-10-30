@@ -97,6 +97,18 @@ const getStatusColor = (status) => {
 };
 
 
+const getWorkTypeColor = (workType) => {
+  switch (String(workType || "").toLowerCase()) {
+    case "meeting":
+      return "bg-violet-100 text-violet-700 border border-violet-200";
+    case "report":
+      return "bg-cyan-100 text-cyan-700 border border-cyan-200";
+    default:
+      return "bg-slate-100 text-slate-700 border border-slate-200";
+  }
+};
+
+
 const getSubmissionStatus = (actualDate, delayColumn, leaveColumn) => {
   if (isLeaveStatus(leaveColumn)) {
     return { status: 'Leave', color: 'red' }
@@ -204,10 +216,13 @@ const MemoizedTaskRow = memo(({
           )}
         </div>
       </td>
-      <td className="px-3 py-4 min-w-[80px]">
-        <div className={`text-sm break-words font-medium ${isNotToday ? "text-red-600" : "text-gray-900"} ${isDisabled ? "opacity-50" : ""}`}>
+      <td className={`px-3 py-4 min-w-[110px] ${isDisabled ? "opacity-50" : ""}`}>
+        <div className={`text-sm break-words font-medium ${isNotToday ? "text-red-600" : "text-gray-900"}`}>
           {account["col7"] || "—"}
         </div>
+        <span className={`mt-1 inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full ${getWorkTypeColor(account["col17"])}`}>
+          {account["col17"] || "Task"}
+        </span>
       </td>
 
 
@@ -357,6 +372,7 @@ function AccountDataPage() {
   const [userRole, setUserRole] = useState("")
   const [username, setUsername] = useState("")
   const [selectedStatus, setSelectedStatus] = useState("") // New filter for status
+  const [workTypeFilter, setWorkTypeFilter] = useState("") // Filter for Task / Meeting / Report
   const [attachmentFilter, setAttachmentFilter] = useState("") // New filter for attachment
   const [showFilters, setShowFilters] = useState(false) // Toggle for filter section
   const [nameSearchTerm, setNameSearchTerm] = useState("") // Search term for name dropdown
@@ -536,6 +552,7 @@ function AccountDataPage() {
     setSelectedStatus("")
     setNameSearchTerm("")
     setAttachmentFilter("")
+    setWorkTypeFilter("")
   }, [])
 
   // Admin functions for history management
@@ -657,6 +674,12 @@ function AccountDataPage() {
       });
     }
 
+    if (workTypeFilter) {
+      filtered = filtered.filter(
+        (account) => (account["col17"] || "Task") === workTypeFilter
+      );
+    }
+
     if (selectedMembers.length > 0) {
       filtered = filtered.filter((account) => selectedMembers.includes(account["col4"]));
     }
@@ -766,7 +789,7 @@ function AccountDataPage() {
 
       return parsedDateB.getTime() - parsedDateA.getTime();
     });
-  }, [accountData, debouncedSearchTerm, searchTerm, selectedStatus, selectedMembers, startDate, endDate]);
+  }, [accountData, debouncedSearchTerm, searchTerm, selectedStatus, selectedMembers, startDate, endDate, workTypeFilter]);
 
   // Replace existing filteredHistoryData with this
   const filteredHistoryData = useMemo(() => {
@@ -822,7 +845,11 @@ function AccountDataPage() {
           matchesAttachment = !!item["col14"] && item["col14"].trim() !== "";
         }
 
-        return matchesSearch && matchesMember && matchesStatus && matchesDateRange && matchesAttachment
+        const matchesWorkType = workTypeFilter
+          ? (item["col17"] || "Task") === workTypeFilter
+          : true
+
+        return matchesSearch && matchesMember && matchesStatus && matchesDateRange && matchesAttachment && matchesWorkType
       })
       .sort((a, b) => {
         const dateStrA = a["col10"] || ""
@@ -833,7 +860,7 @@ function AccountDataPage() {
         if (!dateB) return -1
         return dateB.getTime() - dateA.getTime()
       })
-  }, [historyData, searchTerm, selectedMembers, selectedStatus, startDate, endDate, parseDateFromDDMMYYYY, attachmentFilter])
+  }, [historyData, searchTerm, selectedMembers, selectedStatus, startDate, endDate, parseDateFromDDMMYYYY, attachmentFilter, workTypeFilter])
 
   const displayedHistoryData = useMemo(() => {
     return filteredHistoryData.slice(0, historyDisplayLimit);
@@ -945,6 +972,7 @@ function AccountDataPage() {
             { v: r['Uploaded Image'] || '' },
             { v: r['Admin Done'] || '' },
             { v: r['Leave'] || '' },
+            { v: r['Work Type'] || '' },
           ]
         }))
       ]
@@ -1011,6 +1039,7 @@ function AccountDataPage() {
           { id: "col14", label: "Uploaded Image", type: "string" },
           { id: "col15", label: "Admin Done", type: "string" },
           { id: "col16", label: "Leave", type: "string" },
+          { id: "col17", label: "Work Type", type: "string" },
         ]
 
         columnHeaders.forEach((header, index) => {
@@ -1175,6 +1204,7 @@ function AccountDataPage() {
                       col14: r['Uploaded Image'] || '',
                       col15: r['Admin Done'] || '',
                       col16: r['Leave'] || '',
+                      col17: r['Work Type'] || '',
                     };
                     allHistory.push(rowData);
                   }
@@ -1207,13 +1237,48 @@ function AccountDataPage() {
     fetchSheetData(false)
   }, [fetchSheetData])
 
-  // Near-real-time refresh: silently re-fetch in the background so
-  // updates made elsewhere in the sheet show up here without a manual reload.
+  // Near-real-time refresh driven by Supabase realtime instead of a 45s poll:
+  // the page only re-fetches when Checklist actually changes. A long fallback
+  // covers a dropped socket, and nothing is fetched while the tab is hidden —
+  // a hidden tab just refreshes once when it becomes visible again.
   useEffect(() => {
-    const intervalId = setInterval(() => {
+    let debounceTimer
+    let staleWhileHidden = false
+
+    const refresh = () => {
+      if (document.hidden) {
+        staleWhileHidden = true
+        return
+      }
       fetchSheetData(true)
-    }, 45000)
-    return () => clearInterval(intervalId)
+    }
+
+    const debouncedRefresh = () => {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(refresh, 3000)
+    }
+
+    const channel = supabase
+      .channel('checklist-page-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'Checklist' }, debouncedRefresh)
+      .subscribe()
+
+    const fallbackInterval = setInterval(refresh, 5 * 60 * 1000)
+
+    const onVisibilityChange = () => {
+      if (!document.hidden && staleWhileHidden) {
+        staleWhileHidden = false
+        fetchSheetData(true)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      clearTimeout(debounceTimer)
+      clearInterval(fallbackInterval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      supabase.removeChannel(channel)
+    }
   }, [fetchSheetData])
 
   // Checkbox handlers with better state management
@@ -1306,11 +1371,11 @@ function AccountDataPage() {
 
   useEffect(() => {
     setDisplayLimit(500);
-  }, [debouncedSearchTerm, selectedStatus, selectedMembers, startDate, endDate]);
+  }, [debouncedSearchTerm, selectedStatus, selectedMembers, startDate, endDate, workTypeFilter]);
 
   useEffect(() => {
     setHistoryDisplayLimit(500);
-  }, [debouncedSearchTerm, selectedStatus, selectedMembers, startDate, endDate, showHistory]);
+  }, [debouncedSearchTerm, selectedStatus, selectedMembers, startDate, endDate, showHistory, workTypeFilter]);
 
   const displayedAccountData = useMemo(() => {
     return filteredAccountData.slice(0, displayLimit);
@@ -1501,6 +1566,23 @@ function AccountDataPage() {
             </div>
           )}
 
+          {/* Work Type Filter */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-purple-700 mb-1">
+              Filter by Work Type:
+            </label>
+            <select
+              value={workTypeFilter}
+              onChange={(e) => setWorkTypeFilter(e.target.value)}
+              className="bg-white border-2 border-purple-300 rounded-xl px-4 py-2 text-sm min-w-[140px] focus:outline-none focus:ring-2 focus:ring-purple-400 shadow-[0_4px_10px_rgba(168,85,247,0.2)] transition-all cursor-pointer"
+            >
+              <option value="">All Work Types</option>
+              <option value="Task">Task</option>
+              <option value="Meeting">Meeting</option>
+              <option value="Report">Report</option>
+            </select>
+          </div>
+
           {/* Name/Member Filter with Search Dropdown */}
           {getFilteredMembersList().length > 0 && (
             <div className="flex flex-col relative">
@@ -1635,6 +1717,7 @@ function AccountDataPage() {
             endDate ||
             searchTerm ||
             selectedStatus ||
+            workTypeFilter ||
             nameSearchTerm) && (
               <button
                 onClick={() => {
@@ -1967,7 +2050,8 @@ function AccountDataPage() {
                       startDate ||
                       endDate ||
                       searchTerm ||
-                      selectedStatus) && (
+                      selectedStatus ||
+                      workTypeFilter) && (
                         <div className="px-3 py-2 bg-white rounded-md shadow-sm">
                           <span className="text-xs text-gray-500">
                             Filtered Results
@@ -2069,8 +2153,8 @@ function AccountDataPage() {
                       <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 min-w-[140px]">
                         Task Start Date & Time
                       </th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
-                        Freq
+                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[110px]">
+                        Freq / Work Type
                       </th>
 
 
@@ -2260,11 +2344,14 @@ function AccountDataPage() {
                                 </div>
                               </td>
 
-                              {/* Freq */}
-                              <td className="px-3 py-4 min-w-[80px]">
+                              {/* Freq / Work Type */}
+                              <td className="px-3 py-4 min-w-[110px]">
                                 <div className="text-sm text-gray-900 break-words">
                                   {history["col7"] || "—"}
                                 </div>
+                                <span className={`mt-1 inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full ${getWorkTypeColor(history["col17"])}`}>
+                                  {history["col17"] || "Task"}
+                                </span>
                               </td>
 
                               {/* Actual Date & Time */}
@@ -2474,8 +2561,8 @@ function AccountDataPage() {
                       <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-yellow-50 min-w-[140px]">
                         Task Start Date & Time
                       </th>
-                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[80px]">
-                        Freq
+                      <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[110px]">
+                        Freq / Work Type
                       </th>
 
 

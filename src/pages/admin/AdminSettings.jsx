@@ -2160,7 +2160,7 @@ export default function AdminSettings() {
         {currentTab === 'home' && (
           <div className="space-y-8">
             {/* Header Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 md:p-8 text-white shadow-2xl border border-slate-800">
+            <div className="relative overflow-hidden rounded-3xl p-6 md:p-8 text-white shadow-2xl border border-slate-800" style={{ background: "linear-gradient(90deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)" }}>
               <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 text-xs font-semibold uppercase tracking-wider">
@@ -2186,7 +2186,7 @@ export default function AdminSettings() {
 
                   <button
                     onClick={handleOpenCreateUserModal}
-                    className="flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-white shadow-lg transition-all duration-300 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 hover:shadow-emerald-500/25 active:scale-95 text-xs cursor-pointer"
+                    className="flex items-center gap-2.5 px-5 py-3 rounded-2xl font-bold text-white shadow-lg transition-all duration-300 hover:brightness-110 hover:shadow-emerald-500/25 active:scale-95 text-xs cursor-pointer" style={{ background: "linear-gradient(90deg,#059669,#0d9488)" }}
                   >
                     <UserPlus className="h-4 w-4" />
                     <span>+ Create New User ID</span>
@@ -2276,7 +2276,7 @@ export default function AdminSettings() {
               <div className="bg-white/90 backdrop-blur-xl border-2 border-emerald-100 rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:border-emerald-300">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform" style={{ background: "linear-gradient(135deg,#10b981,#0d9488)" }}>
                       <Users className="h-6 w-6" />
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -2311,7 +2311,7 @@ export default function AdminSettings() {
               <div className="bg-white/90 backdrop-blur-xl border-2 border-indigo-100 rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:border-indigo-300">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform" style={{ background: "linear-gradient(135deg,#6366f1,#2563eb)" }}>
                       <FileSpreadsheet className="h-6 w-6" />
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -2347,7 +2347,7 @@ export default function AdminSettings() {
               <div className="bg-white/90 backdrop-blur-xl border-2 border-purple-100 rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:border-purple-300">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 text-white shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform" style={{ background: "linear-gradient(135deg,#a855f7,#db2777)" }}>
                       <Sliders className="h-6 w-6" />
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
@@ -2383,7 +2383,7 @@ export default function AdminSettings() {
               <div className="bg-white/90 backdrop-blur-xl border-2 border-blue-100 rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:border-blue-300">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-600 text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform" style={{ background: "linear-gradient(135deg,#3b82f6,#0891b2)" }}>
                       <ListChecks className="h-6 w-6" />
                     </div>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
@@ -2668,7 +2668,7 @@ export default function AdminSettings() {
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-md shadow-emerald-500/20">
+                  <div className="p-2.5 rounded-xl text-white shadow-md shadow-emerald-500/20" style={{ background: "linear-gradient(45deg,#059669,#14b8a6)" }}>
                     <UserPlus className="h-5 w-5" />
                   </div>
                   <div>
@@ -2891,7 +2891,7 @@ export default function AdminSettings() {
           <div id="manual-data-dump" className="bg-white/90 backdrop-blur-xl border-2 border-indigo-200/80 rounded-3xl p-6 md:p-8 shadow-md space-y-6 scroll-mt-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div className="flex items-center gap-3.5">
-                <div className="p-3 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-500/20">
+                <div className="p-3 rounded-2xl text-white shadow-lg shadow-emerald-500/20" style={{ background: "linear-gradient(45deg,#059669,#14b8a6)" }}>
                   <FileSpreadsheet className="h-6 w-6" />
                 </div>
                 <div>
@@ -3533,7 +3533,7 @@ export default function AdminSettings() {
                   {/* Header */}
                   <div className="relative flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="relative p-3 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-amber-300 shadow-lg shadow-indigo-500/40">
+                      <div className="relative p-3 rounded-2xl text-amber-300 shadow-lg shadow-indigo-500/40" style={{ background: "linear-gradient(135deg,#6366f1,#9333ea)" }}>
                         <Moon className="h-5 w-5" />
                         <span className="absolute inset-0 rounded-2xl ring-1 ring-white/20" />
                       </div>
@@ -3600,7 +3600,8 @@ export default function AdminSettings() {
                       type="button"
                       onClick={() => handleSetupNightlyTrigger(selectedTimingHour)}
                       disabled={isSettingUpNightlyTrigger}
-                      className="flex-1 flex items-center justify-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50 ring-1 ring-white/10"
+                      style={{ background: "linear-gradient(90deg,#4f46e5,#9333ea)" }}
+                      className="flex-1 flex items-center justify-center gap-2 px-3.5 py-2.5 hover:brightness-110 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50 ring-1 ring-white/10"
                     >
                       <Zap className={`h-3.5 w-3.5 ${isSettingUpNightlyTrigger ? 'animate-spin' : ''}`} />
                       <span>{isSettingUpNightlyTrigger ? 'Configuring Cloud...' : '🌙 Refresh Cloud Trigger'}</span>
@@ -3872,6 +3873,7 @@ export default function AdminSettings() {
                     <th className="py-2.5 px-2.5 w-24 whitespace-nowrap">Department</th>
                     <th className="py-2.5 px-2.5 w-24 whitespace-nowrap">Assignee</th>
                     <th className="py-2.5 px-2.5">Task Description</th>
+                    <th className="py-2.5 px-2 w-24 text-center whitespace-nowrap">Work Type</th>
                     <th className="py-2.5 px-2 w-20 text-center whitespace-nowrap">Frequency</th>
                     <th className="py-2.5 px-2.5 w-32 whitespace-nowrap">Last Generated</th>
                     <th className="py-2.5 px-2 w-28 text-center whitespace-nowrap" title="Status for Selected Date">Status</th>
@@ -3881,7 +3883,7 @@ export default function AdminSettings() {
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {filteredTemplates.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="py-8 text-center text-slate-400 italic">
+                      <td colSpan="9" className="py-8 text-center text-slate-400 italic">
                         No matching recurring templates found
                       </td>
                     </tr>
@@ -3902,6 +3904,15 @@ export default function AdminSettings() {
                           <td className="py-2.5 px-2.5 font-semibold text-slate-800 whitespace-nowrap">{t.Name || '-'}</td>
                           <td className="py-2.5 px-2.5 max-w-[200px] xl:max-w-[280px] truncate text-slate-700" title={t['Task Description'] || t['Tast Descriptions']}>
                             {t['Task Description'] || t['Tast Descriptions'] || '-'}
+                          </td>
+                          <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              String(t['Work Type'] || '').toLowerCase() === 'meeting' ? 'bg-violet-100 text-violet-700' :
+                              String(t['Work Type'] || '').toLowerCase() === 'report' ? 'bg-cyan-100 text-cyan-700' :
+                              'bg-slate-100 text-slate-700'
+                            }`}>
+                              {t['Work Type'] || 'Task'}
+                            </span>
                           </td>
                           <td className="py-2.5 px-2 text-center whitespace-nowrap">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${

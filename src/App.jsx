@@ -12,6 +12,7 @@ import AdminDataPage from "./pages/admin/admin-data-page"
 import AccountDataPage from "./pages/delegation"
 import "./index.css"
 import QuickTask from "./pages/QuickTask"
+import PendingReport from "./pages/admin/PendingReport"
 
 import TrainingVideo from "./pages/TrainingVideo"
 import MaintenancePage from "./pages/MaintenancePage"
@@ -77,6 +78,16 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={["admin", "user"]}>
             <AdminAssignTask />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Pending Report route */}
+      <Route
+        path="/dashboard/pending-report"
+        element={
+          <ProtectedRoute allowedRoles={["admin", "user"]}>
+            <PendingReport />
           </ProtectedRoute>
         }
       />

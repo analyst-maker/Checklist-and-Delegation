@@ -128,8 +128,14 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
     const fetchProfilePhoto = async () => {
       const storedUsername = sessionStorage.getItem('username');
       if (!storedUsername) return;
+      // Already resolved this session (the upload flow keeps it current).
+      if (sessionStorage.getItem('profile_photo_url')) return;
       try {
-        const { data, error } = await supabase.from('Whatsapp').select('*');
+        const { data, error } = await supabase
+          .from('Whatsapp')
+          .select('Username, Photo')
+          .ilike('Username', storedUsername.trim())
+          .limit(1);
         if (error) throw error;
         const userRow = (data || []).find(r => (r['User name'] || r.Username || '').toLowerCase() === storedUsername.toLowerCase());
         const photo = userRow && (userRow.Photo || userRow.Image);
@@ -262,6 +268,13 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
       icon: Database,
       active: location.pathname === "/dashboard/data/sales",
       showFor: ["admin", "user"] // Show for both roles
+    },
+    {
+      href: "/dashboard/pending-report",
+      label: "Pending Report",
+      icon: FileText,
+      active: location.pathname === "/dashboard/pending-report",
+      showFor: ["admin", "user"]
     },
     {
       href: "/dashboard/quick-task",

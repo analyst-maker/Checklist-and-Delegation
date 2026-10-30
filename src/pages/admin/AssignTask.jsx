@@ -190,6 +190,19 @@ const addYears = (date, years) => {
   return newDate;
 };
 
+// Shared styling for the form's dropdowns. The native arrow is replaced with an
+// inline SVG chevron so the control matches the rest of the purple form chrome.
+const SELECT_CLASS =
+  "w-full appearance-none rounded-xl border border-purple-200 bg-white py-2.5 pl-3.5 pr-10 text-sm font-medium text-slate-700 shadow-sm cursor-pointer transition-all duration-200 hover:border-purple-400 hover:bg-purple-50/40 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+
+const SELECT_ARROW_STYLE = {
+  backgroundImage:
+    "url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239333ea' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 0.85rem center",
+  backgroundSize: "1.05rem",
+};
+
 export default function AssignTask() {
   const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyAy98t3XAyRP3pFE7XOoDiTDU3Yc9WOIFayRXELW2XnUAzl7yE9bnO94GvZV0wJkH_/exec";
   // const [showTaskTypePopup, setShowTaskTypePopup] = useState(true);
@@ -247,6 +260,7 @@ export default function AssignTask() {
     department: "",
     givenBy: "",
     doer: "",
+    workType: "Task", // 'Task' | 'Meeting' | 'Report'
     description: "",
     frequency: "daily",
     enableReminders: true,
@@ -297,15 +311,13 @@ export default function AssignTask() {
   // Function to fetch options from Supabase tables (Whatsapp, Unique, Delegation)
   const fetchMasterSheetOptions = async () => {
     try {
-      const [wRes, uRes, dRes] = await Promise.all([
-        supabase.from('Whatsapp').select('*').order('Username', { ascending: true }),
-        supabase.from('Unique').select('*').limit(1000),
-        supabase.from('Delegation').select('*').limit(500)
-      ]);
+      // Only the Whatsapp table feeds these dropdowns, and only these columns.
+      const wRes = await supabase
+        .from('Whatsapp')
+        .select('Username, Role, Department, "Given By"')
+        .order('Username', { ascending: true });
 
       const wData = wRes.data || [];
-      const uData = uRes.data || [];
-      const dData = dRes.data || [];
 
       // Helper to check if a user in Whatsapp table is active and not deleted
       const isUserActive = (r) => {
@@ -443,6 +455,7 @@ export default function AssignTask() {
       department: "",
       givenBy: "",
       doer: userRole !== "admin" && username ? formData.doer : "",
+      workType: "Task",
       description: "",
       frequency: "daily",
       enableReminders: true,
@@ -649,6 +662,7 @@ export default function AssignTask() {
       department: "",
       givenBy: "",
       doer: userRole !== "admin" && username ? formData.doer : "",
+      workType: "Task",
       description: "",
       frequency: "daily",
       enableReminders: true,
@@ -1077,6 +1091,7 @@ export default function AssignTask() {
           Department: formData.department,
           'Give By': formData.givenBy || 'Admin',
           Name: formData.doer,
+          'Work Type': formData.workType || 'Task',
           'Task Description': formData.description,
           'Task Start date': dateStr,
           Frequency: formData.frequency,
@@ -1113,6 +1128,7 @@ export default function AssignTask() {
               Department: formData.department,
               'Given By': formData.givenBy || 'Admin',
               Name: formData.doer,
+              'Work Type': formData.workType || 'Task',
               'Tast Descriptions': formData.description,
               'Task Start Date': todayStr,
               Freq: formData.frequency,
@@ -1129,6 +1145,7 @@ export default function AssignTask() {
         department: "",
         givenBy: "",
         doer: "",
+        workType: "Task",
         description: "",
         frequency: "daily",
         enableReminders: true,
@@ -1267,7 +1284,7 @@ export default function AssignTask() {
                       value={formData.department}
                       onChange={handleChange}
                       required
-                      className="w-full rounded-md border border-purple-200 p-2 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      className={SELECT_CLASS} style={SELECT_ARROW_STYLE}
                     >
                       <option value="">Select Department</option>
                       {departmentOptions.map((dept, index) => (
@@ -1297,7 +1314,7 @@ export default function AssignTask() {
                       value={formData.givenBy}
                       onChange={handleChange}
                       required
-                      className="w-full rounded-md border border-purple-200 p-2 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      className={SELECT_CLASS} style={SELECT_ARROW_STYLE}
                     >
                       <option value="">Select Given By</option>
                       {givenByOptions.map((person, index) => (
@@ -1322,7 +1339,7 @@ export default function AssignTask() {
                       value={formData.doer}
                       onChange={handleChange}
                       required
-                      className="w-full rounded-md border border-purple-200 p-2 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      className={SELECT_CLASS} style={SELECT_ARROW_STYLE}
                     >
                       <option value="">Select Doer</option>
                       {doerOptions.map((doer, index) => (
@@ -1332,6 +1349,30 @@ export default function AssignTask() {
                       ))}
                     </select>
                   </div>
+
+                  {/* Work Type Dropdown — checklist tasks only */}
+                  {formData.taskType !== "delegation" && (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="workType"
+                      className="block text-sm font-medium text-purple-700"
+                    >
+                      Work Type *
+                    </label>
+                    <select
+                      id="workType"
+                      name="workType"
+                      value={formData.workType}
+                      onChange={handleChange}
+                      required
+                      className={SELECT_CLASS} style={SELECT_ARROW_STYLE}
+                    >
+                      <option value="Task">Task</option>
+                      <option value="Meeting">Meeting</option>
+                      <option value="Report">Report</option>
+                    </select>
+                  </div>
+                  )}
 
                   {/* Description */}
                   {/* Description with Voice Input */}
@@ -1485,7 +1526,7 @@ export default function AssignTask() {
                         name="frequency"
                         value={formData.frequency}
                         onChange={handleChange}
-                        className="w-full rounded-md border border-purple-200 p-2 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        className={SELECT_CLASS} style={SELECT_ARROW_STYLE}
                       // disabled={selectedTaskType === "delegation"} // Disable for delegation
                       >
                         {getFrequencies().map((freq) => (

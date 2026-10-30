@@ -324,6 +324,68 @@ export default function AdminDashboard() {
     return isNaN(d.getTime()) ? null : d
   }
 
+  // Build the last 4 calendar weeks (Monday to Saturday, oldest first) so the
+  // "Task Completion Rate" card reflects the recent 4 weeks instead of all time.
+  // Sunday is treated as the off day and is not counted in any week.
+  const getLast4WeekCompletion = () => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    // Monday of the current week. Sunday (getDay() === 0) still belongs to the
+    // week that started on the previous Monday.
+    const currentMonday = new Date(today)
+    const dayOfWeek = today.getDay() // 0 = Sun, 1 = Mon ... 6 = Sat
+    currentMonday.setDate(currentMonday.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+
+    // Monday of the oldest week shown (3 weeks before the current one).
+    const windowStart = new Date(currentMonday)
+    windowStart.setDate(windowStart.getDate() - 21)
+
+    // weeks[0] = oldest week, weeks[3] = current week
+    const weeks = [0, 1, 2, 3].map(() => ({ total: 0, completed: 0 }))
+
+    ;(departmentData.allTasks || []).forEach((task) => {
+      const taskDate = parseDateFromDDMMYYYY(task.taskStartDate)
+      if (!taskDate) return
+      taskDate.setHours(0, 0, 0, 0)
+      if (taskDate < windowStart || taskDate > today) return
+      if (taskDate.getDay() === 0) return // skip Sundays — week runs Mon to Sat
+
+      const bucket = Math.floor((taskDate - windowStart) / 86400000 / 7)
+      if (bucket < 0 || bucket > 3) return
+
+      weeks[bucket].total++
+      if (task.status === "completed") weeks[bucket].completed++
+    })
+
+    const totalTasks = weeks.reduce((sum, w) => sum + w.total, 0)
+    const completedTasks = weeks.reduce((sum, w) => sum + w.completed, 0)
+
+    return {
+      totalTasks,
+      completedTasks,
+      completionRate: totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : 0,
+      weeks: weeks.map((w, i) => {
+        // Mon to Sat span covered by this bucket, shown as the caption on each week tile.
+        const start = new Date(windowStart)
+        start.setDate(start.getDate() + i * 7)
+        const end = new Date(start)
+        end.setDate(end.getDate() + 5) // Saturday
+        const shortDate = (d) =>
+          `${d.getDate().toString().padStart(2, "0")} ${d.toLocaleString("default", { month: "short" })}`
+
+        return {
+          label: i === 3 ? "This Week" : `Week ${i + 1}`,
+          range: `${shortDate(start)} – ${shortDate(end)}`,
+          isCurrent: i === 3,
+          total: w.total,
+          completed: w.completed,
+          rate: w.total > 0 ? Math.round((w.completed / w.total) * 100) : 0
+        }
+      })
+    }
+  }
+
   // Function to check if a date is in the past (excluding today)
   const isDateInPast = (dateStr) => {
     const date = parseDateFromDDMMYYYY(dateStr)
@@ -457,7 +519,9 @@ export default function AdminDashboard() {
       }
 
       if (isDelegation) {
-        let query = supabase.from('Delegation').select('*');
+        // Only the columns the row processing below reads (ID, name, description,
+        // start date, freq, Actual) — the rest of the row is never used here.
+        let query = supabase.from('Delegation').select('"Task ID", "Name", "Task Description", "Task Start Date", "Freq", "Actual"');
         if (userRole !== "admin" && username) {
           query = query.ilike('Name', username.trim());
         }
@@ -519,7 +583,7 @@ export default function AdminDashboard() {
         if (isUserScoped) {
           completedPromises.push(
             supabase.from('Checklist')
-              .select('*')
+              .select('"Task ID", "Name", "Task Start Date", "Actual", "Leave"')
               .not('Actual', 'is', null)
               .ilike('Name', username.trim())
               .order('Task ID', { ascending: false })
@@ -529,7 +593,7 @@ export default function AdminDashboard() {
           for (let i = 0; i < 7; i++) {
             completedPromises.push(
               supabase.from('Checklist')
-                .select('*')
+                .select('"Task ID", "Name", "Task Start Date", "Actual", "Leave"')
                 .not('Actual', 'is', null)
                 .order('Task ID', { ascending: false })
                 .range(i * batchSize, (i + 1) * batchSize - 1)
@@ -576,6 +640,7 @@ export default function AdminDashboard() {
             { v: r['Uploaded Image'] || '' },
             { v: r['Admin Done'] || '' },
             { v: r['Leave'] || '' },
+            { v: r['Work Type'] || '' },
           ]
         }));
       }
@@ -771,6 +836,8 @@ export default function AdminDashboard() {
           // Get additional task details
           const taskDescription = getCellValue(row, 5) || "Untitled Task"; // Column F - "Task Description"
           const frequency = getCellValue(row, 7) || "one-time"; // Column H - "Freq"
+          // "Work Type" applies to checklist tasks only; it is appended last in that row mapping.
+          const workType = dashboardType === "delegation" ? "" : (getCellValue(row, 17) || "Task");
 
           // UPDATED: Determine task status for display purposes - restored overdue logic for delegation
           let status = "pending";
@@ -799,6 +866,7 @@ export default function AdminDashboard() {
             dueDate: taskStartDate, // Keep for compatibility
             status,
             frequency,
+            workType,
           };
 
           // Debug: Log task object for first few rows
@@ -1087,11 +1155,21 @@ export default function AdminDashboard() {
   // Real-time synchronization: Instant updates via Supabase WebSockets (Ultra-Low Egress)
   useEffect(() => {
     let debounceTimer;
+    let staleWhileHidden = false;
+
+    // Never fetch for a hidden tab; remember it and refresh once on return.
+    const refresh = () => {
+      if (document.hidden) {
+        staleWhileHidden = true;
+        return;
+      }
+      fetchDepartmentData();
+    };
+
+    // 3s window so a bulk submit (many row updates) collapses into one refetch.
     const debouncedFetch = () => {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        fetchDepartmentData();
-      }, 1000);
+      debounceTimer = setTimeout(refresh, 3000);
     };
 
     const targetTable = dashboardType === "delegation" ? "Delegation" : "Checklist";
@@ -1101,13 +1179,20 @@ export default function AdminDashboard() {
       .subscribe();
 
     // Safety fallback: 5-minute interval instead of 15 seconds (saves ~95% egress)
-    const fallbackInterval = setInterval(() => {
-      fetchDepartmentData();
-    }, 5 * 60 * 1000);
+    const fallbackInterval = setInterval(refresh, 5 * 60 * 1000);
+
+    const onVisibilityChange = () => {
+      if (!document.hidden && staleWhileHidden) {
+        staleWhileHidden = false;
+        fetchDepartmentData();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     return () => {
       clearTimeout(debounceTimer);
       clearInterval(fallbackInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, [dashboardType]);
@@ -1225,6 +1310,17 @@ export default function AdminDashboard() {
         return "bg-emerald-500 hover:bg-emerald-600 text-white"
       default:
         return "bg-gray-500 hover:bg-gray-600 text-white"
+    }
+  }
+
+  const getWorkTypeColor = (workType) => {
+    switch (String(workType || "").toLowerCase()) {
+      case "meeting":
+        return "bg-violet-100 text-violet-700 border border-violet-200"
+      case "report":
+        return "bg-cyan-100 text-cyan-700 border border-cyan-200"
+      default:
+        return "bg-slate-100 text-slate-700 border border-slate-200"
     }
   }
 
@@ -1581,8 +1677,8 @@ export default function AdminDashboard() {
         </div>
 
         {/* Task Navigation Tabs - Restored to 3 tabs for both modes */}
-        <div className="w-full overflow-hidden rounded-2xl shadow-sm" style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.6)' }}>
-          <div className="grid grid-cols-3 p-1.5 gap-1" style={{ background: 'rgba(255,255,255,0.3)' }}>
+        <div className="w-full rounded-2xl shadow-sm relative z-30" style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.6)' }}>
+          <div className="grid grid-cols-2 p-1.5 gap-1 rounded-t-2xl" style={{ background: 'rgba(255,255,255,0.3)' }}>
             <button
               className={`py-2.5 text-center text-sm font-medium rounded-xl transition-all duration-200 ${taskView === "recent"
                 ? "bg-slate-800 text-white shadow-md"
@@ -1590,18 +1686,7 @@ export default function AdminDashboard() {
                 }`}
               onClick={() => setTaskView("recent")}
             >
-              {dashboardType === "delegation" ? "Today Tasks" : "Recent Tasks"}
-            </button>
-            <button
-              className={`py-2.5 text-center text-sm font-medium rounded-xl transition-all duration-200 ${taskView === "upcoming"
-                ? "bg-slate-800 text-white shadow-md"
-                : "text-slate-500 hover:bg-white/60"
-                }`}
-              onClick={() => setTaskView("upcoming")}
-            >
-              {dashboardType === "delegation"
-                ? "Future Tasks"
-                : "Upcoming Tasks"}
+              {dashboardType === "delegation" ? "Today Tasks" : "Recent Tasks (Today Task)"}
             </button>
             <button
               className={`py-2.5 text-center text-sm font-medium rounded-xl transition-all duration-200 ${taskView === "overdue"
@@ -1690,6 +1775,14 @@ export default function AdminDashboard() {
                       >
                         Task Description
                       </th>
+                      {dashboardType !== "delegation" && (
+                        <th
+                          scope="col"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        >
+                          Work Type
+                        </th>
+                      )}
                       <th
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -1719,6 +1812,17 @@ export default function AdminDashboard() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {task.title}
                         </td>
+                        {dashboardType !== "delegation" && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${getWorkTypeColor(
+                                task.workType
+                              )}`}
+                            >
+                              {task.workType || "Task"}
+                            </span>
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {task.assignedTo}
                         </td>
@@ -1747,36 +1851,119 @@ export default function AdminDashboard() {
         <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1">
           <div className="rounded-2xl shadow-sm hover:shadow-md transition-all duration-300" style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.6)' }}>
             <div className="flex flex-row items-center justify-between p-4 pb-2">
-              <h3 className="text-sm font-medium text-indigo-600">
-                Task Completion Rate
-              </h3>
+              <div>
+                <h3 className="text-sm font-medium text-indigo-600">
+                  Task Completion Rate
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Last 4 weeks</p>
+              </div>
               <div className="h-8 w-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.1)' }}>
                 <BarChart3 className="h-4 w-4 text-indigo-500" />
               </div>
             </div>
-            <div className="p-4 pt-1">
-              <div className="flex items-center justify-between">
-                <div className="text-3xl font-bold text-slate-800">
-                  {departmentData.completionRate}%
+            {(() => {
+              const fourWeek = getLast4WeekCompletion();
+              return (
+                <div className="p-4 pt-1">
+                  <div className="flex items-center justify-between">
+                    <div className="text-3xl font-bold text-slate-800">
+                      {fourWeek.completionRate}%
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="inline-block w-3 h-3 bg-emerald-500 rounded-full"></span>
+                      <span className="text-xs text-slate-500">
+                        Completed: {fourWeek.completedTasks}
+                      </span>
+                      <span className="inline-block w-3 h-3 bg-amber-500 rounded-full"></span>
+                      <span className="text-xs text-slate-500">
+                        Total: {fourWeek.totalTasks}
+                      </span>
+                    </div>
+                  </div>
+                  <div
+                    className="w-full h-3 rounded-full mt-3 overflow-hidden"
+                    style={{ background: 'rgba(15,23,42,0.10)', boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.08)' }}
+                    title={`${fourWeek.completionRate}% completed`}
+                  >
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${fourWeek.completionRate}%`,
+                        background:
+                          Number(fourWeek.completionRate) >= 75
+                            ? 'linear-gradient(90deg,#059669,#34d399)'
+                            : Number(fourWeek.completionRate) >= 40
+                              ? 'linear-gradient(90deg,#d97706,#fbbf24)'
+                              : 'linear-gradient(90deg,#e11d48,#fb7185)'
+                      }}
+                    ></div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+                    {fourWeek.weeks.map((week) => {
+                      const empty = week.total === 0;
+                      const tone = empty
+                        ? { text: 'text-slate-400', fill: '#cbd5e1', dot: '#cbd5e1' }
+                        : week.rate >= 75
+                          ? { text: 'text-emerald-600', fill: 'linear-gradient(90deg,#059669,#34d399)', dot: '#10b981' }
+                          : week.rate >= 40
+                            ? { text: 'text-amber-600', fill: 'linear-gradient(90deg,#d97706,#fbbf24)', dot: '#f59e0b' }
+                            : { text: 'text-rose-600', fill: 'linear-gradient(90deg,#e11d48,#fb7185)', dot: '#f43f5e' };
+
+                      return (
+                        <div
+                          key={week.label}
+                          className="rounded-2xl p-3.5 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+                          style={{
+                            background: week.isCurrent ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.65)',
+                            border: week.isCurrent ? '1px solid rgba(99,102,241,0.35)' : '1px solid rgba(255,255,255,0.8)',
+                            boxShadow: week.isCurrent ? '0 2px 10px rgba(99,102,241,0.12)' : '0 1px 4px rgba(15,23,42,0.04)'
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                              <span className="inline-block w-2 h-2 rounded-full" style={{ background: tone.dot }}></span>
+                              {week.label}
+                            </span>
+                            <span className={`text-base font-extrabold tabular-nums ${tone.text}`}>
+                              {week.rate}%
+                            </span>
+                          </div>
+
+                          <p className="text-[10px] text-slate-400 mt-0.5 ml-3">{week.range}</p>
+
+                          <div
+                            className="relative w-full h-2.5 rounded-full mt-2.5 overflow-hidden"
+                            style={{ background: 'rgba(15,23,42,0.10)', boxShadow: 'inset 0 1px 2px rgba(15,23,42,0.08)' }}
+                            title={`${week.rate}% completed`}
+                          >
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{
+                                width: `${empty ? 0 : Math.max(week.rate, 4)}%`,
+                                background: tone.fill,
+                                boxShadow: empty ? 'none' : '0 0 6px rgba(15,23,42,0.18)'
+                              }}
+                            ></div>
+                          </div>
+
+                          <p className="text-[11px] text-slate-500 mt-2 font-medium">
+                            {empty ? (
+                              <span className="text-slate-400">No tasks</span>
+                            ) : (
+                              <>
+                                <span className="font-bold text-slate-700">{week.completed}</span>
+                                <span className="text-slate-400"> / {week.total} completed</span>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="inline-block w-3 h-3 bg-emerald-500 rounded-full"></span>
-                  <span className="text-xs text-slate-500">
-                    Completed: {departmentData.completedTasks}
-                  </span>
-                  <span className="inline-block w-3 h-3 bg-amber-500 rounded-full"></span>
-                  <span className="text-xs text-slate-500">
-                    Total: {departmentData.totalTasks}
-                  </span>
-                </div>
-              </div>
-              <div className="w-full h-2 rounded-full mt-2" style={{ background: 'rgba(0,0,0,0.06)' }}>
-                <div
-                  className="h-full bg-gradient-to-r from-emerald-500 to-amber-400 rounded-full transition-all duration-500"
-                  style={{ width: `${departmentData.completionRate}%` }}
-                ></div>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </div>
 

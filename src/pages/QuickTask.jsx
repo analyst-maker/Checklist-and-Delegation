@@ -111,7 +111,7 @@ export default function QuickTask() {
       const activeRole = (userRole || sessionStorage.getItem('role') || 'user').toLowerCase().trim();
       let checklistQuery = supabase
         .from('Unique')
-        .select('"Task ID", "Department", "Give By", "Name", "Task Description", "Task Start date", "Frequency", "Enable Reminder", "Require Attatchment"')
+        .select('"Task ID", "Department", "Give By", "Name", "Work Type", "Task Description", "Task Start date", "Frequency", "Enable Reminder", "Require Attatchment"')
         .order('Task ID', { ascending: false })
         .limit(1000);
       if (activeRole !== 'admin' && user) {
@@ -128,6 +128,7 @@ export default function QuickTask() {
             Department: row['Department'] || "",
             'Given By': row['Give By'] || row['Given By'] || "Admin",
             Name: row['Name'] || "",
+            'Work Type': row['Work Type'] || "Task",
             'Task Description': row['Task Description'] || row['Tast Descriptions'] || "",
             'Start Date': row['Task Start date'] || row['Task Start Date'] || "",
             Frequency: row['Frequency'] || row['Freq'] || "daily",
@@ -659,6 +660,7 @@ export default function QuickTask() {
                           label: "Task Description",
                           minWidth: "min-w-[300px]",
                         },
+                        { key: "Work Type", label: "Work Type" },
                         {
                           key: "Start Date",
                           label: "Start Date",
@@ -695,7 +697,7 @@ export default function QuickTask() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {loading ? (
                       <tr>
-                        <td colSpan={8} className="px-6 py-12 text-center">
+                        <td colSpan={9} className="px-6 py-12 text-center">
                           <div className="flex justify-center">
                             <div className="luxury-loader-card">
                               <div className="luxury-spinner-box">
@@ -730,6 +732,18 @@ export default function QuickTask() {
                               {task["Task Description"] || "—"}
                             </div>
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${String(task["Work Type"] || "").toLowerCase() === "meeting"
+                                ? "bg-violet-100 text-violet-700 border border-violet-200"
+                                : String(task["Work Type"] || "").toLowerCase() === "report"
+                                  ? "bg-cyan-100 text-cyan-700 border border-cyan-200"
+                                  : "bg-slate-100 text-slate-700 border border-slate-200"
+                                }`}
+                            >
+                              {task["Work Type"] || "Task"}
+                            </span>
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 bg-yellow-50">
                             {task["Start Date"] || "—"}
                           </td>
@@ -758,7 +772,7 @@ export default function QuickTask() {
                     ) : (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={9}
                           className="px-6 py-4 text-center text-gray-500"
                         >
                           {searchTerm || nameFilter || freqFilter
