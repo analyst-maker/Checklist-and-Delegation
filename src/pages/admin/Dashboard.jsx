@@ -396,6 +396,34 @@ export default function AdminDashboard() {
     return date.getTime() < today.getTime()
   }
 
+  // Function to check if task completion was delayed (completed after assigned time)
+  const isTaskDelayed = (assignedDateTime, completionDateTime) => {
+    if (!assignedDateTime || !completionDateTime) return false
+    const assignedTime = parseDateTime(assignedDateTime)
+    const completionTime = parseDateTime(completionDateTime)
+    if (!assignedTime || !completionTime) return false
+    return completionTime.getTime() > assignedTime.getTime()
+  }
+
+  // Function to parse date time string (handles "DD/MM/YYYY HH:MM:SS" format)
+  const parseDateTime = (dateTimeStr) => {
+    if (!dateTimeStr || typeof dateTimeStr !== 'string') return null
+    const cleanStr = dateTimeStr.trim()
+    // Try to parse DD/MM/YYYY HH:MM:SS or DD/MM/YYYY HH:MM format
+    const match = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(cleanStr)
+    if (match) {
+      const day = parseInt(match[1], 10)
+      const month = parseInt(match[2], 10) - 1
+      const year = parseInt(match[3], 10)
+      const hours = parseInt(match[4], 10)
+      const minutes = parseInt(match[5], 10)
+      const seconds = match[6] ? parseInt(match[6], 10) : 0
+      const date = new Date(year, month, day, hours, minutes, seconds)
+      return isNaN(date.getTime()) ? null : date
+    }
+    return null
+  }
+
   // Function to check if a date is today
   const isDateToday = (dateStr) => {
     const date = parseDateFromDDMMYYYY(dateStr)
@@ -434,7 +462,7 @@ export default function AdminDashboard() {
     return cell && 'v' in cell ? cell.v : null;
   };
 
-  // Parse Google Sheets Date format into a proper date string
+  // Parse Google Sheets Date format into a proper date string with time if available
   const parseGoogleSheetsDate = (dateStr) => {
     if (!dateStr) return ''
 
@@ -451,23 +479,27 @@ export default function AdminDashboard() {
       }
     }
 
-    // If it contains a date in DD/MM/YYYY format
+    // If it contains a date in DD/MM/YYYY format with optional time
     if (typeof dateStr === 'string') {
       const cleanStr = dateStr.trim();
+      const timePart = cleanStr.includes(' ') ? cleanStr.split(' ').slice(1).join(' ') : (cleanStr.includes('T') ? cleanStr.split('T')[1] : null);
       const datePart = cleanStr.includes(' ') ? cleanStr.split(' ')[0] : (cleanStr.includes('T') ? cleanStr.split('T')[0] : cleanStr);
+
       if (datePart.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
         const parts = datePart.split('/');
         const day = parts[0].padStart(2, '0');
         const month = parts[1].padStart(2, '0');
         const year = parts[2];
-        return `${day}/${month}/${year}`;
+        const formatted = `${day}/${month}/${year}`;
+        return timePart ? `${formatted} ${timePart}` : formatted;
       }
       if (datePart.match(/^\d{4}-\d{1,2}-\d{1,2}$/)) {
         const parts = datePart.split('-');
         const year = parts[0];
         const month = parts[1].padStart(2, '0');
         const day = parts[2].padStart(2, '0');
-        return `${day}/${month}/${year}`;
+        const formatted = `${day}/${month}/${year}`;
+        return timePart ? `${formatted} ${timePart}` : formatted;
       }
     }
 
@@ -839,11 +871,27 @@ export default function AdminDashboard() {
           // "Work Type" applies to checklist tasks only; it is appended last in that row mapping.
           const workType = dashboardType === "delegation" ? "" : (getCellValue(row, 17) || "Task");
 
+          // Get timestamp if available (Column A - index 0)
+          const timestampValue = getCellValue(row, 0);
+          let displayTaskStartDate = taskStartDate;
+          if (timestampValue && String(timestampValue).trim()) {
+            const parsedTimestamp = parseGoogleSheetsDate(String(timestampValue));
+            if (parsedTimestamp && parsedTimestamp.includes(':')) {
+              displayTaskStartDate = parsedTimestamp;
+            }
+          }
+
           // UPDATED: Determine task status for display purposes - restored overdue logic for delegation
           let status = "pending";
+          let isDelayed = false;
 
           if (completionDate && completionDate !== "") {
             status = "completed";
+            // Check if completion was delayed
+            isDelayed = isTaskDelayed(displayTaskStartDate, completionDate);
+            if (isDelayed) {
+              status = "delayed";
+            }
           } else if (isDateInPast(taskStartDate) && !isDateToday(taskStartDate)) {
             // For both modes: past dates (excluding today) = overdue
             status = "overdue";
@@ -862,11 +910,12 @@ export default function AdminDashboard() {
             id: taskIdStr,
             title: taskDescription,
             assignedTo,
-            taskStartDate,
+            taskStartDate: displayTaskStartDate,
             dueDate: taskStartDate, // Keep for compatibility
             status,
             frequency,
             workType,
+            isDelayed,
           };
 
           // Debug: Log task object for first few rows
@@ -1280,6 +1329,8 @@ export default function AdminDashboard() {
     switch (status) {
       case "completed":
         return "bg-green-500 hover:bg-green-600 text-white"
+      case "delayed":
+        return "bg-orange-600 hover:bg-orange-700 text-white"
       case "pending":
         return "bg-amber-500 hover:bg-amber-600 text-white"
       case "overdue":
@@ -1432,26 +1483,26 @@ export default function AdminDashboard() {
   // Staff Tasks Table Component
   const StaffTasksTable = () => {
     return (
-      <div className="rounded-md border border-gray-200 overflow-x-auto">
+      <div className="rounded-md border border-gray-200 overflow-auto max-h-[500px]">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 Name
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 Total Tasks
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 Completed
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 Pending
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 Progress
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
                 Status
               </th>
             </tr>
@@ -1686,7 +1737,7 @@ export default function AdminDashboard() {
                 }`}
               onClick={() => setTaskView("recent")}
             >
-              {dashboardType === "delegation" ? "Today Tasks" : "Recent Tasks (Today Task)"}
+              Today Task
             </button>
             <button
               className={`py-2.5 text-center text-sm font-medium rounded-xl transition-all duration-200 ${taskView === "overdue"
@@ -1773,6 +1824,12 @@ export default function AdminDashboard() {
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                       >
+                        Status
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
                         Task Description
                       </th>
                       {dashboardType !== "delegation" && (
@@ -1793,7 +1850,7 @@ export default function AdminDashboard() {
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                       >
-                        Task Start Date
+                        Task Start Date & Time
                       </th>
                       <th
                         scope="col"
@@ -1808,6 +1865,15 @@ export default function AdminDashboard() {
                       <tr key={task.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {task.id}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusColor(
+                              task.status
+                            )}`}
+                          >
+                            {task.status === "delayed" ? "Delay" : task.status}
+                          </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {task.title}
@@ -2002,7 +2068,7 @@ export default function AdminDashboard() {
           {activeTab === "overview" && (
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                <div className="lg:col-span-4 rounded-2xl shadow-sm" style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.6)' }}>
+                <div className="lg:col-span-7 rounded-2xl shadow-sm" style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.6)' }}>
                   <div className="p-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.4)' }}>
                     <h3 className="text-slate-700 font-semibold">
                       Tasks Overview
@@ -2013,19 +2079,6 @@ export default function AdminDashboard() {
                   </div>
                   <div className="p-4 pl-2">
                     <TasksOverviewChart />
-                  </div>
-                </div>
-                <div className="lg:col-span-3 rounded-2xl shadow-sm" style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.6)' }}>
-                  <div className="p-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.4)' }}>
-                    <h3 className="text-slate-700 font-semibold">
-                      Task Status
-                    </h3>
-                    <p className="text-slate-400 text-sm">
-                      Distribution of tasks by status
-                    </p>
-                  </div>
-                  <div className="p-4">
-                    <TasksCompletionChart />
                   </div>
                 </div>
               </div>

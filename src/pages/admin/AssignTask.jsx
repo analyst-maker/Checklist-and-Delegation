@@ -1029,11 +1029,12 @@ export default function AssignTask() {
         todayDate.setHours(0, 0, 0, 0);
 
         const tasksToInsert = generatedTasks.map((t, idx) => {
-          const taskStartDate = t.dueDate.split(' ')[0] || formatDateToDDMMYYYY(date || now);
-          
+          const taskStartDate = t.dueDate || formatDateToDDMMYYYY(date || now);
+          const taskStartDateOnly = taskStartDate.split(' ')[0];
+
           let isFuture = false;
-          if (taskStartDate) {
-            const parts = taskStartDate.split('/');
+          if (taskStartDateOnly) {
+            const parts = taskStartDateOnly.split('/');
             if (parts.length === 3) {
               const startObj = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
               isFuture = startObj.getTime() > todayDate.getTime();
@@ -1080,10 +1081,11 @@ export default function AssignTask() {
       } else {
         // Checklist task: Insert into Unique recurring template table with guaranteed unique Task ID
         const nextId = await getNextTaskId('Unique');
-        const dateStr = formatDateToDDMMYYYY(date || now);
+        const dateStr = formatDateTimeForStorage(date || now, time);
+        const dateOnly = formatDateToDDMMYYYY(date || now);
 
         const todayStr = formatDateToDDMMYYYY(now);
-        const isStartingToday = (dateStr === todayStr);
+        const isStartingToday = (dateOnly === todayStr);
 
         const templateRow = {
           'Task ID': nextId,
@@ -1103,7 +1105,7 @@ export default function AssignTask() {
           // "Never generated before" path then produces the FIRST task on the start date for any
           // frequency. (Previously pre-filling it with the start date made the engine treat the start
           // date itself as "already generated today" via isSameDay() and skip that first occurrence.)
-          'Last Date': isStartingToday ? dateStr : ''
+          'Last Date': isStartingToday ? dateOnly : ''
         };
 
         const { error: uErr } = await supabase.from('Unique').insert([templateRow]);
@@ -1115,7 +1117,7 @@ export default function AssignTask() {
             .from('Checklist')
             .select('"Task ID"')
             .eq('Name', formData.doer)
-            .eq('Task Start Date', todayStr)
+            .eq('Task Start Date', dateStr)
             .ilike('Tast Descriptions', (formData.description || '').trim())
             .limit(1);
 
@@ -1130,7 +1132,7 @@ export default function AssignTask() {
               Name: formData.doer,
               'Work Type': formData.workType || 'Task',
               'Tast Descriptions': formData.description,
-              'Task Start Date': todayStr,
+              'Task Start Date': dateStr,
               Freq: formData.frequency,
               'Enable Reminders': formData.enableReminders ? 'Yes' : 'No',
               'Require Attachment': formData.requireAttachment ? 'Yes' : 'No',

@@ -426,7 +426,7 @@ export default function AdminSettings() {
   // Determine active tab from URL hash
   const currentTab = useMemo(() => {
     const rawHash = (location.hash || '').replace('#', '').trim();
-    if (['user-management', 'manual-data-dump', 'trigger-console', 'recurring-templates'].includes(rawHash)) {
+    if (['user-management', 'manual-data-dump', 'trigger-console', 'recurring-templates', 'holiday-calendar'].includes(rawHash)) {
       return rawHash;
     }
     return 'home';
@@ -448,7 +448,10 @@ export default function AdminSettings() {
   const [todayGeneratedCount, setTodayGeneratedCount] = useState(0);
   const [calendarDates, setCalendarDates] = useState([]);
   const [holidays, setHolidays] = useState([]);
-  
+  const [newHolidayName, setNewHolidayName] = useState('');
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayDay, setNewHolidayDay] = useState('');
+
   // Nightly Cloud Trigger State & Timing Configuration
   const [nightlyTriggerHour, setNightlyTriggerHour] = useState(() => {
     return localStorage.getItem('nightly_trigger_hour') || '2';
@@ -607,7 +610,8 @@ export default function AdminSettings() {
 
       const cachedHol = localStorage.getItem('cache_holidays');
       const cachedHolTime = Number(localStorage.getItem('cache_holidays_time') || 0);
-      const isHolValid = cachedHol && (Date.now() - cachedHolTime < 6 * 60 * 60 * 1000);
+      const cachedHolData = cachedHol ? JSON.parse(cachedHol) : null;
+      const isHolValid = cachedHol && (Date.now() - cachedHolTime < 6 * 60 * 60 * 1000) && Array.isArray(cachedHolData) && cachedHolData.length > 0;
 
       const [uRes, cCountRes, dCountRes, todayCountRes, calRes, holRes, wRes] = await Promise.all([
         supabase.from('Unique').select('*').limit(3000),
@@ -615,7 +619,7 @@ export default function AdminSettings() {
         supabase.from('Delegation').select('*', { count: 'exact', head: true }),
         supabase.from('Checklist').select('*', { count: 'exact', head: true }).eq('Task Start Date', todayDDMMYYYY),
         isCalValid ? Promise.resolve({ data: JSON.parse(cachedCal) }) : supabase.from('Working Day Calendar').select('*').limit(3000),
-        isHolValid ? Promise.resolve({ data: JSON.parse(cachedHol) }) : supabase.from('Holiday List').select('*').limit(1000),
+        isHolValid ? Promise.resolve({ data: cachedHolData }) : supabase.from('Holiday List').select('*').limit(1000),
         supabase.from('Whatsapp').select('*').order('Username', { ascending: true })
       ]);
 
@@ -1095,6 +1099,55 @@ export default function AdminSettings() {
       return matchesSearch && matchesRole;
     });
   }, [users, userSearchTerm, userRoleFilter, currentTab]);
+
+  // Holiday Calendar Handlers
+  const handleAddHoliday = async () => {
+    if (!newHolidayName.trim() || !newHolidayDate.trim() || !newHolidayDay.trim()) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('Holiday List')
+        .insert([
+          { Date: newHolidayDate.trim(), Day: newHolidayDay.trim(), Holiday: newHolidayName.trim() }
+        ]);
+
+      if (error) throw error;
+
+      // Add to local state
+      setHolidays([...holidays, { Date: newHolidayDate, Day: newHolidayDay, Holiday: newHolidayName }]);
+      setNewHolidayName('');
+      setNewHolidayDate('');
+      setNewHolidayDay('');
+      alert('✅ Holiday added successfully!');
+    } catch (err) {
+      console.error('Error adding holiday:', err);
+      alert('Error adding holiday: ' + err.message);
+    }
+  };
+
+  const handleDeleteHoliday = async (idx) => {
+    const holidayToDelete = holidays[idx];
+    if (!window.confirm(`Delete ${holidayToDelete.Holiday}?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('Holiday List')
+        .delete()
+        .match({ Date: holidayToDelete.Date, Holiday: holidayToDelete.Holiday });
+
+      if (error) throw error;
+
+      setHolidays(holidays.filter((_, i) => i !== idx));
+      alert('✅ Holiday deleted successfully!');
+    } catch (err) {
+      console.error('Error deleting holiday:', err);
+      alert('Error deleting holiday: ' + err.message);
+    }
+  };
+
 
   // Run Task Generation Trigger
   const handleExecuteTrigger = async (specificId = null) => {
@@ -2150,6 +2203,17 @@ export default function AdminSettings() {
                 <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
                 <span>Whatsapp Service</span>
               </Link>
+
+              <Link
+                to="/dashboard/settings#holiday-calendar"
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                  currentTab === 'holiday-calendar'
+                    ? 'bg-orange-600 text-white shadow-md shadow-orange-600/25'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+                }`}
+              >
+                <span>Holiday Calendar</span>
+              </Link>
             </div>
           </div>
         )}
@@ -2442,6 +2506,40 @@ export default function AdminSettings() {
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer"
                   >
                     <span>Open Whatsapp Service</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </div>
+
+              {/* 6. Holiday Calendar */}
+              <div className="bg-white/90 backdrop-blur-xl border-2 border-orange-200 rounded-3xl p-6 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group hover:border-orange-300">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 text-white shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+                      <Calendar className="h-6 w-6" />
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                      2026
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-lg font-extrabold text-slate-800 group-hover:text-orange-700 transition-colors">
+                      Holiday Calendar
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                      Company holidays add karein, manage karein aur Holiday List table mein dates store karein.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-5 mt-4 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400">Holiday List Table</span>
+                  <Link
+                    to="/dashboard/settings#holiday-calendar"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-md shadow-orange-600/20 transition-all active:scale-95 cursor-pointer"
+                  >
+                    <span>Add Holidays</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
@@ -3988,6 +4086,100 @@ export default function AdminSettings() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Holiday Calendar Section */}
+        {currentTab === 'holiday-calendar' && (
+          <div id="holiday-calendar" className="bg-white/90 backdrop-blur-xl border-2 border-orange-200/80 rounded-3xl p-6 md:p-8 shadow-md space-y-6 scroll-mt-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 border-b border-slate-100 pb-6">
+              <div className="flex items-center gap-4">
+                <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-500 text-white shadow-lg shadow-orange-500/30 ring-4 ring-orange-50">
+                  <Calendar className="h-7 w-7" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h2 className="text-xl font-extrabold tracking-tight text-slate-800">
+                      Holiday Calendar
+                    </h2>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-bold text-orange-700">
+                      <span className="h-1.5 w-1.5 rounded-full bg-orange-500"></span>
+                      2026
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Company holidays manage karein aur add karein.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Holidays List */}
+            <div>
+              <div className="max-h-[400px] overflow-y-auto">
+                <h3 className="text-sm font-bold text-slate-800 sticky top-0 z-10 bg-white/95 backdrop-blur-sm py-2 mb-1">📅 Holidays</h3>
+                <div className="grid gap-2">
+                  {Array.isArray(holidays) && holidays.length > 0 ? (
+                    holidays.map((holiday, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-orange-100 bg-orange-50 hover:bg-orange-100 transition-colors">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-sm text-slate-800">{holiday.Holiday}</span>
+                            <span className="text-xs text-slate-600">{holiday.Date} • {holiday.Day}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteHoliday(idx)}
+                          className="p-2 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors"
+                          title="Delete holiday"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-slate-500">
+                      <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No holidays added yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Add Holiday Form */}
+            <div className="border-t border-slate-100 pt-6">
+              <h3 className="text-sm font-bold text-slate-800 mb-4">➕ Add Holiday</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <input
+                  type="text"
+                  placeholder="Holiday Name (e.g., Diwali)"
+                  value={newHolidayName}
+                  onChange={(e) => setNewHolidayName(e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Date (DD/MM/YYYY)"
+                  value={newHolidayDate}
+                  onChange={(e) => setNewHolidayDate(e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Day (Monday, Friday, etc.)"
+                  value={newHolidayDay}
+                  onChange={(e) => setNewHolidayDay(e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+              </div>
+              <button
+                onClick={handleAddHoliday}
+                className="mt-3 w-full py-2.5 rounded-lg text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-md shadow-orange-600/20 transition-all active:scale-95"
+              >
+                Add Holiday
+              </button>
             </div>
           </div>
         )}

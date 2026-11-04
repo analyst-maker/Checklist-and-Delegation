@@ -1,9 +1,11 @@
 "use client"
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react"
-import { CheckCircle2, Upload, X, Search, History, ArrowLeft, Filter, Edit, Camera, Image as ImageIcon, Clipboard, RefreshCw } from "lucide-react"
+import { CheckCircle2, Upload, X, Search, History, ArrowLeft, Filter, Edit, Camera, Image as ImageIcon, Clipboard, RefreshCw, Download } from "lucide-react"
 import AdminLayout from "../../components/layout/AdminLayout"
 import { supabase } from "../../lib/supabaseClient"
 import { uploadImageToCloudinary } from "../../lib/cloudinary"
+import { jsPDF } from "jspdf"
+import "jspdf-autotable"
 
 // Configuration object - Move all configurations here
 const CONFIG = {
@@ -198,7 +200,7 @@ const MemoizedTaskRow = memo(({
           {account["col5"] || "—"}
         </div>
       </td>
-      <td className={`px-3 py-4 ${isNotToday ? "bg-white border-l-4 border-white" : "hover:bg-gray-50"} min-w-[140px]`}>
+      <td className={`px-3 py-4 ${isNotToday ? "bg-white border-l-4 border-white" : "hover:bg-gray-50"} min-w-[150px]`}>
         <div className={`text-sm break-words ${isNotToday ? "text-red-600" : "text-gray-900"} ${isDisabled ? "opacity-50" : ""}`}>
           {account["col6"] ? (
             <div>
@@ -206,8 +208,20 @@ const MemoizedTaskRow = memo(({
                 {account["col6"].includes(" ") ? account["col6"].split(" ")[0] : account["col6"]}
               </div>
               {account["col6"].includes(" ") && (
-                <div className={`text-xs break-words ${isNotToday ? "text-red-500" : "text-gray-500"}`}>
-                  {account["col6"].split(" ")[1]}
+                <div className={`text-xs font-semibold break-words ${isNotToday ? "text-red-500" : "text-blue-600"}`}>
+                  {(() => {
+                    const timeStr = account["col6"].split(" ").slice(1).join(" ");
+                    // Format time HH:MM:SS to HH:MM AM/PM if possible
+                    const timeParts = timeStr.split(":");
+                    if (timeParts.length >= 2) {
+                      const hours = parseInt(timeParts[0], 10);
+                      const minutes = timeParts[1];
+                      const ampm = hours >= 12 ? "PM" : "AM";
+                      const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+                      return `${displayHours}:${minutes} ${ampm}`;
+                    }
+                    return timeStr;
+                  })()}
                 </div>
               )}
             </div>
@@ -392,6 +406,7 @@ function AccountDataPage() {
     isOpen: false,
     itemCount: 0,
   })
+  const [showExportModal, setShowExportModal] = useState(false)
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("")
   // Function to determine submission status
   useEffect(() => {
@@ -555,6 +570,75 @@ function AccountDataPage() {
     setWorkTypeFilter("")
   }, [])
 
+  const exportToExcel = () => {
+    const dataToExport = showHistory ? filteredHistoryData : filteredAccountData
+    if (dataToExport.length === 0) {
+      alert("No data to export")
+      return
+    }
+
+    const csv = [
+      ["Task ID", "Name", "Task Description", "Status", "Remarks", "Task Start Date & Time", "Freq / Work Type", "Actual Time", "Admin", "Submission Status"],
+      ...dataToExport.map(row => [
+        row["Task ID"] || "",
+        row["Name"] || "",
+        row["Task Description"] || "",
+        row["Status"] || "",
+        row["Remarks"] || "",
+        row["Task Start Date"] || "",
+        row["Freq / Work Type"] || "",
+        row["Actual Time"] || "",
+        row["Admin"] || "",
+        row["Submission Status"] || ""
+      ])
+    ]
+
+    let csvContent = csv.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n")
+    const link = document.createElement("a")
+    link.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent)
+    link.download = `checklist-${showHistory ? "history" : "tasks"}-${new Date().toISOString().split('T')[0]}.csv`
+    link.click()
+    setShowExportModal(false)
+  }
+
+  const exportToPdf = () => {
+    const dataToExport = showHistory ? filteredHistoryData : filteredAccountData
+    if (dataToExport.length === 0) {
+      alert("No data to export")
+      return
+    }
+
+    const doc = new jsPDF({ orientation: 'landscape' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 10
+    const columns = ["Task ID", "Name", "Description", "Status", "Remarks", "Date & Time", "Type", "Actual Time", "Admin", "Submission"]
+    const rows = dataToExport.map(row => [
+      row["Task ID"] || "",
+      (row["Name"] || "").substring(0, 10),
+      (row["Task Description"] || "").substring(0, 15),
+      row["Status"] || "",
+      (row["Remarks"] || "").substring(0, 10),
+      row["Task Start Date"] || "",
+      (row["Freq / Work Type"] || "").substring(0, 8),
+      row["Actual Time"] || "",
+      row["Admin"] || "",
+      row["Submission Status"] || ""
+    ])
+
+    doc.autoTable({
+      head: [columns],
+      body: rows,
+      startY: 20,
+      margin: { top: margin, right: margin, bottom: margin, left: margin },
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [147, 51, 234], textColor: 255, fontStyle: 'bold' }
+    })
+
+    doc.save(`checklist-${showHistory ? "history" : "tasks"}-${new Date().toISOString().split('T')[0]}.pdf`)
+    setShowExportModal(false)
+  }
+
   // Admin functions for history management
   const handleMarkMultipleDone = async () => {
     if (selectedHistoryItems.length === 0) {
@@ -690,13 +774,15 @@ function AccountDataPage() {
         if (!itemDate) return false;
 
         if (startDate) {
-          const startDateObj = new Date(startDate);
+          const startDateParts = startDate.split("-");
+          const startDateObj = new Date(startDateParts[0], startDateParts[1] - 1, startDateParts[2]);
           startDateObj.setHours(0, 0, 0, 0);
           if (itemDate < startDateObj) return false;
         }
 
         if (endDate) {
-          const endDateObj = new Date(endDate);
+          const endDateParts = endDate.split("-");
+          const endDateObj = new Date(endDateParts[0], endDateParts[1] - 1, endDateParts[2]);
           endDateObj.setHours(23, 59, 59, 999);
           if (itemDate > endDateObj) return false;
         }
@@ -824,17 +910,21 @@ function AccountDataPage() {
 
         let matchesDateRange = true
         if (startDate || endDate) {
-          const itemDate = parseDateFromDDMMYYYY(item["col10"])
-          if (!itemDate) return false
-          if (startDate) {
-            const startDateObj = new Date(startDate)
-            startDateObj.setHours(0, 0, 0, 0)
-            if (itemDate < startDateObj) matchesDateRange = false
-          }
-          if (endDate) {
-            const endDateObj = new Date(endDate)
-            endDateObj.setHours(23, 59, 59, 999)
-            if (itemDate > endDateObj) matchesDateRange = false
+          const itemDate = parseDateFromDDMMYYYY(item["col6"])
+          if (itemDate) {
+            itemDate.setHours(0, 0, 0, 0)
+            if (startDate) {
+              const startDateParts = startDate.split("-")
+              const startDateObj = new Date(startDateParts[0], startDateParts[1] - 1, startDateParts[2])
+              startDateObj.setHours(0, 0, 0, 0)
+              if (itemDate.getTime() < startDateObj.getTime()) matchesDateRange = false
+            }
+            if (endDate) {
+              const endDateParts = endDate.split("-")
+              const endDateObj = new Date(endDateParts[0], endDateParts[1] - 1, endDateParts[2])
+              endDateObj.setHours(0, 0, 0, 0)
+              if (itemDate.getTime() > endDateObj.getTime()) matchesDateRange = false
+            }
           }
         }
 
@@ -1869,6 +1959,15 @@ function AccountDataPage() {
               Filters
             </button>
 
+            {/* Export Button */}
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center justify-center py-2 px-4 bg-white text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-50 hover:border-purple-300 transition-all duration-200 shadow-sm text-sm font-medium w-full sm:min-w-[100px] sm:w-auto"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </button>
+
             {/* History Toggle Button */}
             <button
               onClick={toggleHistory}
@@ -2632,6 +2731,75 @@ function AccountDataPage() {
               </div>
 
             </>
+          )}
+
+          {/* Export Format Modal */}
+          {showExportModal && (
+            <div className="fixed inset-0 bg-gradient-to-b from-black/40 to-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+              <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-8 max-w-lg mx-4 shadow-2xl border border-white/20 overflow-hidden">
+                {/* Header */}
+                <div className="mb-8">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-3 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
+                      <Download className="h-6 w-6 text-white" />
+                    </div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                      Export Data
+                    </h2>
+                  </div>
+                  <p className="text-slate-500 text-sm ml-12">
+                    Choose your preferred format to download the data
+                  </p>
+                </div>
+
+                {/* Buttons */}
+                <div className="space-y-4">
+                  <button
+                    onClick={exportToExcel}
+                    className="w-full group relative overflow-hidden rounded-2xl p-5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-green-500/30 active:scale-95 transform"
+                  >
+                    <div className="relative z-10 flex items-center justify-center gap-3">
+                      <div className="text-2xl">📊</div>
+                      <div className="text-left">
+                        <div className="font-bold text-white text-lg">Export as Excel</div>
+                        <div className="text-green-100 text-xs">CSV Format • Easy to use</div>
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                  </button>
+
+                  <button
+                    onClick={exportToPdf}
+                    className="w-full group relative overflow-hidden rounded-2xl p-5 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 transition-all duration-300 shadow-lg hover:shadow-2xl hover:shadow-red-500/30 active:scale-95 transform"
+                  >
+                    <div className="relative z-10 flex items-center justify-center gap-3">
+                      <div className="text-2xl">📄</div>
+                      <div className="text-left">
+                        <div className="font-bold text-white text-lg">Export as PDF</div>
+                        <div className="text-red-100 text-xs">Professional Format • Print-ready</div>
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-rose-500 opacity-0 group-hover:opacity-20 transition-opacity duration-300"></div>
+                  </button>
+
+                  <button
+                    onClick={() => setShowExportModal(false)}
+                    className="w-full group relative overflow-hidden rounded-2xl p-4 bg-gradient-to-r from-slate-200 to-slate-300 hover:from-slate-300 hover:to-slate-400 transition-all duration-300 shadow-md hover:shadow-lg active:scale-95 transform mt-6"
+                  >
+                    <div className="relative z-10 font-semibold text-slate-700 group-hover:text-slate-800">
+                      Cancel
+                    </div>
+                  </button>
+                </div>
+
+                {/* Footer Note */}
+                <div className="mt-6 p-4 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-100">
+                  <p className="text-xs text-slate-600 text-center">
+                    💡 <span className="font-semibold">Tip:</span> Choose Excel for spreadsheets or PDF for reports and printing
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

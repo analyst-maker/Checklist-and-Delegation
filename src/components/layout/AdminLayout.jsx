@@ -154,8 +154,14 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+      const isImage = file.type.startsWith('image/');
+      const isExcel = file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+                      file.type === 'application/vnd.ms-excel' ||
+                      file.name.endsWith('.xlsx') ||
+                      file.name.endsWith('.xls');
+
+      if (!isImage && !isExcel) {
+        alert('Please select an image or Excel file');
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
@@ -304,6 +310,7 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
         { name: "Task Generation Trigger Console", link: "/dashboard/settings#trigger-console" },
         { name: "Recurring Checklist Templates Inspector", link: "/dashboard/settings#recurring-templates" },
         { name: "Whatsapp Service", link: "/dashboard/settings/whatsapp-sms" },
+        { name: "Holiday Calendar", link: "/dashboard/settings#holiday-calendar" },
       ]
     },
   ]
@@ -902,7 +909,7 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Image File
+                  Select Image or Excel File
                 </label>
                 <input
                   type="file"
@@ -911,7 +918,7 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Supported formats: JPG, PNG, GIF (Max 10MB)
+                  Supported formats: JPG, PNG, GIF, Excel (.xls, .xlsx) (Max 10MB)
                 </p>
               </div>
 
@@ -1065,8 +1072,11 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
             }
           `}</style>
           <div className="fixed md:left-[280px] md:right-3 left-0 right-0 bottom-0 py-1.5 px-4 z-10 flex items-center justify-center rounded-t-2xl shadow-[0_-4px_10px_-2px_rgba(0,0,0,0.05)]" style={{ background: 'rgba(255,255,255,0.75)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.8)', borderLeft: '1px solid rgba(255,255,255,0.5)', borderRight: '1px solid rgba(255,255,255,0.5)' }}>
-            <div 
-              className="text-[10px] sm:text-[11px] font-black tracking-[0.15em] text-transparent bg-clip-text"
+            <a
+              href="https://zentrixs.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] sm:text-[11px] font-black tracking-[0.15em] text-transparent bg-clip-text hover:opacity-80 transition-opacity cursor-pointer"
               style={{
                 backgroundImage: 'linear-gradient(90deg, #022c22 0%, #064e3b 35%, #10b981 50%, #064e3b 65%, #022c22 100%)',
                 backgroundSize: '200% auto',
@@ -1074,8 +1084,8 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
                 textShadow: '1px 1px 2px rgba(0,0,0,0.5)'
               }}
             >
-              <TypingText text="DEVELOPED BY DEEPAK SAHU" />
-            </div>
+              <TypingText text="DEVELOPED BY ZENTRIXS" />
+            </a>
           </div>
         </main>
       </div>

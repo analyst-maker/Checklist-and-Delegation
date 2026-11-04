@@ -41,16 +41,21 @@ const TypingText = ({ text }) => {
   }, [index, text]);
 
   return (
-    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#24150D] border border-[#7A3614]/40 shadow-sm backdrop-blur-md">
+    <a
+      href="https://zentrixs.in"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#24150D] border border-[#7A3614]/40 shadow-sm backdrop-blur-md hover:opacity-80 transition-opacity cursor-pointer"
+    >
       <span className="flex h-2 w-2 relative shrink-0">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
         <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
       </span>
       <span className="text-[10px] sm:text-[11px] font-black tracking-widest text-[#ECC3A3] font-mono uppercase">
-        {displayed || "DEVELOPED BY DEEPAK SAHU"}
+        {displayed || "DEVELOPED BY ZENTRIXS"}
       </span>
       <span className="w-1 h-3 bg-amber-400 animate-pulse rounded-xs"></span>
-    </div>
+    </a>
   );
 };
 
@@ -396,9 +401,9 @@ const LoginPage = () => {
               <span className="w-1.5 h-1.5 rounded-full bg-[#E4D1C3]"></span>
             </div>
 
-            {/* Bottom Motion Badge: DEVELOPED BY DEEPAK SAHU */}
+            {/* Bottom Motion Badge: DEVELOPED BY ZENTRIXS */}
             <div className="pt-1 flex justify-center">
-              <TypingText text="DEVELOPED BY DEEPAK SAHU" />
+              <TypingText text="DEVELOPED BY ZENTRIXS" />
             </div>
           </div>
 

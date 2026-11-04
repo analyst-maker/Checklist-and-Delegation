@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { format } from 'date-fns';
 import { supabase } from '../lib/supabaseClient';
 import { Search, ChevronDown, Filter, RefreshCw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
@@ -29,6 +29,24 @@ export default function QuickTask() {
     name: false,
     frequency: false
   });
+
+  const dropdownRefName = useRef(null);
+  const dropdownRefFrequency = useRef(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRefName.current && !dropdownRefName.current.contains(event.target)) {
+        setDropdownOpen(prev => ({ ...prev, name: false }));
+      }
+      if (dropdownRefFrequency.current && !dropdownRefFrequency.current.contains(event.target)) {
+        setDropdownOpen(prev => ({ ...prev, frequency: false }));
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const CONFIG = {
     SHEET_ID: "1r3YHyjqv24gZXBI9IofAhodnlBuDTA3sgyzU_PNCaQg",
@@ -476,7 +494,7 @@ export default function QuickTask() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-5 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-stretch sm:items-center">
             <div className="flex border border-purple-200 rounded-md overflow-hidden self-start">
               <button
                 className={`px-4 py-2 text-sm font-medium transition-colors duration-300 ${activeTab === "checklist"
@@ -498,7 +516,7 @@ export default function QuickTask() {
               </button>
             </div>
 
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-[180px]">
               <Search
                 className="absolute left-3 top-7 transform -translate-y-1/2 text-slate-500"
                 size={18}
@@ -513,8 +531,8 @@ export default function QuickTask() {
               />
             </div>
 
-            <div className="flex gap-2">
-              <div className="relative">
+            <div className="flex gap-2 flex-shrink-0">
+              <div className="relative" ref={dropdownRefName}>
                 <button
                   onClick={() => toggleDropdown("name")}
                   className="flex items-center gap-2 px-3 py-2 border border-purple-200 rounded-md bg-white text-sm text-gray-700 hover:bg-gray-50"
@@ -569,7 +587,7 @@ export default function QuickTask() {
                 )}
               </div>
 
-              <div className="relative">
+              <div className="relative" ref={dropdownRefFrequency}>
                 <button
                   onClick={() => toggleDropdown("frequency")}
                   className="flex items-center gap-2 px-3 py-2 border border-purple-200 rounded-md bg-white text-sm text-gray-700 hover:bg-gray-50"

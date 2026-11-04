@@ -67,6 +67,9 @@ export default function PendingReport() {
   const [error, setError] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [workTypeFilter, setWorkTypeFilter] = useState("")
+  const [personFilter, setPersonFilter] = useState("")
+  const [startDate, setStartDate] = useState("")
+  const [endDate, setEndDate] = useState("")
   const [expandedDoer, setExpandedDoer] = useState(null)
 
   const userRole = sessionStorage.getItem("role") || "user"
@@ -135,10 +138,30 @@ export default function PendingReport() {
     fetchPendingTasks()
   }, [fetchPendingTasks])
 
+  // Unique person names for the dropdown.
+  const personOptions = useMemo(
+    () => Array.from(new Set(tasks.map((t) => t.name).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [tasks]
+  )
+
   // Group the pending tasks by doer, newest-overdue first.
   const doers = useMemo(() => {
+    // HTML date inputs give YYYY-MM-DD.
+    const rangeStart = startDate
+      ? (() => { const p = startDate.split("-"); const d = new Date(p[0], p[1] - 1, p[2]); d.setHours(0, 0, 0, 0); return d })()
+      : null
+    const rangeEnd = endDate
+      ? (() => { const p = endDate.split("-"); const d = new Date(p[0], p[1] - 1, p[2]); d.setHours(23, 59, 59, 999); return d })()
+      : null
+
     const filtered = tasks.filter((t) => {
       if (workTypeFilter && (t.workType || "Task") !== workTypeFilter) return false
+      if (personFilter && t.name !== personFilter) return false
+      if (rangeStart || rangeEnd) {
+        if (!t.startDate) return false
+        if (rangeStart && t.startDate.getTime() < rangeStart.getTime()) return false
+        if (rangeEnd && t.startDate.getTime() > rangeEnd.getTime()) return false
+      }
       if (!searchTerm) return true
       const q = searchTerm.toLowerCase()
       return (
@@ -168,7 +191,7 @@ export default function PendingReport() {
         }),
       }))
       .sort((a, b) => b.tasks.length - a.tasks.length || a.name.localeCompare(b.name))
-  }, [tasks, searchTerm, workTypeFilter])
+  }, [tasks, searchTerm, workTypeFilter, personFilter, startDate, endDate])
 
   const totals = useMemo(
     () => ({
@@ -342,18 +365,9 @@ export default function PendingReport() {
               orb: "crystal-orb-amber",
               text: "text-amber-600",
             },
-            {
-              label: "Overdue",
-              value: totals.overdue,
-              hint: "Past due date, still not submitted",
-              Icon: AlertTriangle,
-              theme: "card-3d-rose",
-              orb: "crystal-orb-rose",
-              text: "text-rose-600",
-            },
           ].map(({ label, value, hint, Icon, theme, orb, text }) => (
-            <div key={label} className={`card-3d-wrapper ${theme}`}>
-              <div className="flex flex-row items-center justify-between pb-2">
+            <div key={label} className={`card-3d-wrapper ${theme}`} style={{ padding: "14px 18px" }}>
+              <div className="flex flex-row items-center justify-between pb-1">
                 <h3 className={`text-xs font-bold tracking-wider uppercase ${text}`}>
                   {label}
                 </h3>
@@ -361,8 +375,8 @@ export default function PendingReport() {
                   <Icon className="h-5 w-5" />
                 </div>
               </div>
-              <div className="pt-1">
-                <div className="text-3xl font-extrabold text-slate-800 number-3d-text">
+              <div>
+                <div className="text-2xl font-extrabold text-slate-800 number-3d-text leading-tight">
                   {loading ? (
                     <span className="text-base font-semibold text-slate-400 animate-pulse">
                       Loading…
@@ -371,22 +385,53 @@ export default function PendingReport() {
                     value
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-1.5 font-medium">{hint}</p>
+                <p className="text-xs text-slate-400 mt-0.5 font-medium">{hint}</p>
               </div>
             </div>
           ))}
         </div>
 
         {/* Filters */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center rounded-2xl bg-white/70 border border-white/80 shadow-sm p-3 backdrop-blur">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-400" />
             <input
               type="text"
               placeholder="Search doer, task ID or description..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border-2 border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border-2 border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all shadow-sm"
+            />
+          </div>
+
+          {/* Person Name Filter */}
+          <select
+            value={personFilter}
+            onChange={(e) => setPersonFilter(e.target.value)}
+            className="rounded-xl bg-white border-2 border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 min-w-[150px] focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 cursor-pointer transition-all shadow-sm"
+          >
+            <option value="">All Persons</option>
+            {personOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+
+          {/* Date Range Filter */}
+          <div className="flex items-center gap-2 rounded-xl bg-white border-2 border-slate-200 px-3 py-1.5 shadow-sm">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              title="From date"
+              className="text-sm font-medium text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+            />
+            <span className="text-slate-400 text-xs font-bold">→</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              title="To date"
+              className="text-sm font-medium text-slate-700 bg-transparent focus:outline-none cursor-pointer"
             />
           </div>
 
@@ -394,13 +439,28 @@ export default function PendingReport() {
             <select
               value={workTypeFilter}
               onChange={(e) => setWorkTypeFilter(e.target.value)}
-              className="rounded-xl bg-white border-2 border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 min-w-[160px] focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 cursor-pointer transition-all"
+              className="rounded-xl bg-white border-2 border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 min-w-[150px] focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 cursor-pointer transition-all shadow-sm"
             >
               <option value="">All Work Types</option>
               <option value="Task">Task</option>
               <option value="Meeting">Meeting</option>
               <option value="Report">Report</option>
             </select>
+          )}
+
+          {(searchTerm || personFilter || startDate || endDate || workTypeFilter) && (
+            <button
+              onClick={() => {
+                setSearchTerm("")
+                setPersonFilter("")
+                setStartDate("")
+                setEndDate("")
+                setWorkTypeFilter("")
+              }}
+              className="rounded-xl bg-rose-50 border-2 border-rose-200 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-all shadow-sm shrink-0"
+            >
+              Clear
+            </button>
           )}
         </div>
 
@@ -420,7 +480,7 @@ export default function PendingReport() {
             </div>
             <p className="text-slate-700 font-bold">No pending tasks found</p>
             <p className="text-slate-400 text-sm mt-1">
-              {searchTerm || workTypeFilter
+              {searchTerm || workTypeFilter || personFilter || startDate || endDate
                 ? "Try clearing the filters."
                 : `Every ${sourceLabel.toLowerCase()} task is submitted.`}
             </p>
@@ -435,10 +495,10 @@ export default function PendingReport() {
               // Accent follows how bad the backlog is, so the worst doers read first.
               const accent =
                 doer.overdue === 0
-                  ? { bar: "linear-gradient(180deg,#10b981,#34d399)", ring: "rgba(16,185,129,0.35)", fill: "linear-gradient(90deg,#059669,#34d399)" }
+                  ? { bar: "linear-gradient(180deg,#10b981,#34d399)", ring: "rgba(16,185,129,0.35)", fill: "linear-gradient(90deg,#059669,#34d399)", text: "#047857", soft: "rgba(16,185,129,0.12)" }
                   : overduePct >= 60
-                    ? { bar: "linear-gradient(180deg,#e11d48,#fb7185)", ring: "rgba(225,29,72,0.35)", fill: "linear-gradient(90deg,#e11d48,#fb7185)" }
-                    : { bar: "linear-gradient(180deg,#d97706,#fbbf24)", ring: "rgba(217,119,6,0.35)", fill: "linear-gradient(90deg,#d97706,#fbbf24)" }
+                    ? { bar: "linear-gradient(180deg,#e11d48,#fb7185)", ring: "rgba(225,29,72,0.35)", fill: "linear-gradient(90deg,#e11d48,#fb7185)", text: "#be123c", soft: "rgba(225,29,72,0.12)" }
+                    : { bar: "linear-gradient(180deg,#d97706,#fbbf24)", ring: "rgba(217,119,6,0.35)", fill: "linear-gradient(90deg,#d97706,#fbbf24)", text: "#b45309", soft: "rgba(217,119,6,0.12)" }
 
               return (
                 <div
@@ -455,14 +515,18 @@ export default function PendingReport() {
                   {/* severity rail */}
                   <span className="absolute left-0 top-0 bottom-0 w-1.5" style={{ background: accent.bar }} />
 
-                  <div className="flex items-center gap-3 pl-5 pr-4 py-4">
+                  <div className="flex items-center gap-3 pl-5 pr-4 py-1.5">
                     <button
                       onClick={() => setExpandedDoer(isOpen ? null : doer.name)}
                       className="flex flex-1 items-center gap-4 text-left min-w-0"
                     >
+                      <span className="shrink-0 w-6 text-center text-sm font-extrabold text-slate-400 tabular-nums">
+                        {index + 1}
+                      </span>
+
                       <div className="relative shrink-0">
                         <div
-                          className="h-12 w-12 rounded-2xl flex items-center justify-center font-extrabold text-lg uppercase text-white"
+                          className="h-9 w-9 rounded-xl flex items-center justify-center font-extrabold text-sm uppercase text-white"
                           style={{
                             background: "linear-gradient(135deg,#7c3aed,#4f46e5)",
                             boxShadow: "0 8px 18px -6px " + accent.ring + ", inset 0 1px 2px rgba(255,255,255,0.45)",
@@ -470,48 +534,34 @@ export default function PendingReport() {
                         >
                           {doer.name.charAt(0)}
                         </div>
-                        <span className="absolute -top-1.5 -left-1.5 h-5 w-5 rounded-full bg-white text-[10px] font-extrabold text-slate-500 flex items-center justify-center shadow-sm border border-slate-200">
-                          {index + 1}
-                        </span>
                       </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[15px] font-extrabold text-slate-800 truncate">
-                            {doer.name}
-                          </p>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700">
-                            {total} Pending
-                          </span>
-                          {doer.overdue > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700">
-                              <AlertTriangle className="h-3 w-3" />
-                              {doer.overdue} Overdue
-                            </span>
-                          )}
-                        </div>
-
-                        {/* overdue share */}
-                        <div className="mt-2 flex items-center gap-2.5 max-w-sm">
-                          <div
-                            className="h-1.5 flex-1 rounded-full overflow-hidden"
-                            style={{ background: "rgba(15,23,42,0.08)" }}
-                          >
+                      <div className="min-w-0 flex-1 flex items-center gap-3">
+                        <p className="text-base font-extrabold text-slate-800 truncate shrink-0">
+                          {doer.name}
+                        </p>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700 ring-1 ring-amber-200/70 shrink-0">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          {total} Pending
+                        </span>
+                        {/* backlog bar */}
+                        <div className="hidden md:flex items-center gap-2.5 flex-1 max-w-[320px]">
+                          <div className="h-2 flex-1 rounded-full bg-slate-200/70 overflow-hidden shadow-inner">
                             <div
-                              className="h-full rounded-full transition-all duration-700"
-                              style={{
-                                width: `${Math.max(overduePct, doer.overdue > 0 ? 4 : 0)}%`,
-                                background: accent.fill,
-                              }}
+                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              style={{ width: `${Math.min(100, Math.max(12, (total / (totals.pending || 1)) * 100))}%`, background: accent.fill }}
                             />
                           </div>
-                          <span className="text-[11px] font-semibold text-slate-400 whitespace-nowrap">
-                            {doer.overdue > 0 ? `${overduePct}% overdue` : "On track"}
+                          <span
+                            className="text-[11px] font-extrabold tabular-nums shrink-0 px-1.5 py-0.5 rounded-md"
+                            style={{ color: accent.text, background: accent.soft }}
+                          >
+                            {totals.pending > 0 ? Math.round((total / totals.pending) * 100) : 0}%
                           </span>
                         </div>
                       </div>
 
-                      <span className={`hidden sm:flex items-center gap-1.5 text-xs font-semibold shrink-0 transition-colors ${isOpen ? "text-purple-600" : "text-slate-400"}`}>
+                      <span className={`hidden sm:flex items-center gap-1.5 text-xs font-bold shrink-0 transition-all px-3.5 py-2 rounded-xl ${isOpen ? "text-white bg-purple-600 shadow-sm shadow-purple-600/30" : "text-slate-500 bg-slate-100 hover:bg-slate-200"}`}>
                         {isOpen ? "Hide" : "View"} tasks
                         <ChevronDown
                           className={`h-4 w-4 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
@@ -534,16 +584,16 @@ export default function PendingReport() {
                   </div>
 
                   {isOpen && (
-                    <div className="border-t border-slate-200/70 px-5 py-4 overflow-x-auto" style={{ background: "rgba(248,250,252,0.75)" }}>
+                    <div className="border-t border-slate-200/70 px-5 py-4 overflow-auto max-h-[420px]" style={{ background: "rgba(248,250,252,0.75)" }}>
                       <table className="min-w-full">
-                        <thead>
+                        <thead className="sticky top-0 z-10">
                           <tr className="text-left text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                            <th className="pb-2.5 pr-4">Task ID</th>
-                            <th className="pb-2.5 pr-4">Task Description</th>
-                            {source === "checklist" && <th className="pb-2.5 pr-4">Work Type</th>}
-                            <th className="pb-2.5 pr-4">Start Date</th>
-                            <th className="pb-2.5 pr-4">Freq</th>
-                            <th className="pb-2.5 pr-4">Status</th>
+                            <th className="pb-2.5 pr-4 bg-[#f6f8fb]">Task ID</th>
+                            <th className="pb-2.5 pr-4 bg-[#f6f8fb]">Task Description</th>
+                            {source === "checklist" && <th className="pb-2.5 pr-4 bg-[#f6f8fb]">Work Type</th>}
+                            <th className="pb-2.5 pr-4 bg-[#f6f8fb]">Start Date</th>
+                            <th className="pb-2.5 pr-4 bg-[#f6f8fb]">Freq</th>
+                            <th className="pb-2.5 pr-4 bg-[#f6f8fb]">Status</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -582,8 +632,7 @@ export default function PendingReport() {
                                       : "linear-gradient(135deg,#d97706,#fbbf24)",
                                   }}
                                 >
-                                  {task.isOverdue && <AlertTriangle className="h-3 w-3" />}
-                                  {task.isOverdue ? "Overdue" : "Pending"}
+                                  Pending
                                 </span>
                               </td>
                             </tr>
